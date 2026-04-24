@@ -63,6 +63,8 @@ export async function getCurrentUser() {
       programmeStartDate: true,
       units: true,
       equipmentProfile: true,
+      currentLevel: true,
+      completedCircuitsThisLevel: true,
       createdAt: true,
       updatedAt: true,
     },

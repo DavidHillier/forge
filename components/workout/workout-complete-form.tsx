@@ -12,9 +12,10 @@ type Props = {
   totalSeconds: number;
   circuitsCompleted: number;
   roundsCompleted: number;
+  hadFailures: boolean;
 };
 
-export function WorkoutCompleteForm({ workoutId, totalSeconds, circuitsCompleted, roundsCompleted }: Props) {
+export function WorkoutCompleteForm({ workoutId, totalSeconds, circuitsCompleted, roundsCompleted, hadFailures }: Props) {
   const [subs, setSubs] = useState<WorkoutSubstitutionEntry[]>([]);
   const [weightsJson, setWeightsJson] = useState("[]");
 
@@ -31,8 +32,15 @@ export function WorkoutCompleteForm({ workoutId, totalSeconds, circuitsCompleted
       <input type="hidden" name="totalSeconds" value={totalSeconds} />
       <input type="hidden" name="circuitsCompleted" value={circuitsCompleted} />
       <input type="hidden" name="roundsCompleted" value={roundsCompleted} />
+      <input type="hidden" name="hadFailures" value={hadFailures ? "1" : "0"} />
       <input type="hidden" name="substitutionsJson" value={JSON.stringify(subs)} />
       <input type="hidden" name="weightsJson" value={weightsJson} />
+
+      {hadFailures && (
+        <div className="rounded-md border border-[#B94A48]/30 bg-[#B94A48]/10 p-3 text-sm text-[#B94A48]">
+          You had one or more failures — repeat this workout tomorrow with the same exercises.
+        </div>
+      )}
 
       <div className="grid grid-cols-3 gap-3 text-center">
         <div className="rounded-md bg-[#F7F3EA] p-3">

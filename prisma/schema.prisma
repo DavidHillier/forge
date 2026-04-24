@@ -24,23 +24,26 @@ enum TrainingLoad {
 }
 
 model User {
-  id                 String              @id @default(cuid())
-  name               String
-  email              String              @unique
-  passwordHash       String
-  programmeStartDate DateTime
-  units              Units               @default(metric)
-  createdAt          DateTime            @default(now())
-  updatedAt          DateTime            @updatedAt
-  completions        WorkoutCompletion[]
-  readinessChecks    ReadinessCheck[]
-  bodyMetrics        BodyMetric[]
-  weeklyReflections  WeeklyReflection[]
-  consents           UserConsent[]
-  exportRequests     DataExportRequest[]
-  substitutions      WorkoutSubstitution[]
-  exerciseWeights    ExerciseWeight[]
-  equipmentProfile   Json                  @default("[]") // string[]
+  id                         String              @id @default(cuid())
+  name                       String
+  email                      String              @unique
+  passwordHash               String
+  programmeStartDate         DateTime
+  units                      Units               @default(metric)
+  currentLevel               Int                 @default(1)
+  completedCircuitsThisLevel Int                 @default(0)
+  createdAt                  DateTime            @default(now())
+  updatedAt                  DateTime            @updatedAt
+  completions                WorkoutCompletion[]
+  readinessChecks            ReadinessCheck[]
+  bodyMetrics                BodyMetric[]
+  weeklyReflections          WeeklyReflection[]
+  consents                   UserConsent[]
+  exportRequests             DataExportRequest[]
+  substitutions              WorkoutSubstitution[]
+  exerciseWeights            ExerciseWeight[]
+  generatedWorkouts          GeneratedWorkout[]
+  equipmentProfile           Json                  @default("[]") // string[]
 }
 
 model Programme {
@@ -71,24 +74,25 @@ model Week {
 }
 
 model Workout {
-  id              String              @id @default(cuid())
-  weekId          String
-  dayNumber       Int
-  title           String
-  type            String
-  durationMinutes Int
-  intensity       String
-  circuitCount    Int?
-  equipment       Json
-  description     String
-  createdAt       DateTime            @default(now())
-  updatedAt       DateTime            @updatedAt
-  week            Week                  @relation(fields: [weekId], references: [id], onDelete: Cascade)
-  blocks          WorkoutBlock[]
-  completions     WorkoutCompletion[]
-  readinessChecks ReadinessCheck[]
-  substitutions   WorkoutSubstitution[]
-  exerciseWeights ExerciseWeight[]
+  id                String              @id @default(cuid())
+  weekId            String
+  dayNumber         Int
+  title             String
+  type              String
+  durationMinutes   Int
+  intensity         String
+  circuitCount      Int?
+  equipment         Json
+  description       String
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  week              Week                  @relation(fields: [weekId], references: [id], onDelete: Cascade)
+  blocks            WorkoutBlock[]
+  completions       WorkoutCompletion[]
+  readinessChecks   ReadinessCheck[]
+  substitutions     WorkoutSubstitution[]
+  exerciseWeights   ExerciseWeight[]
+  generatedWorkouts GeneratedWorkout[]
 
   @@unique([weekId, dayNumber])
 }
@@ -131,6 +135,7 @@ model WorkoutCompletion {
   roundsCompleted   Int
   effortScore       Int
   trainingLoad      TrainingLoad
+  hadFailures       Boolean      @default(false)
   notes             String?
   user              User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
   workout           Workout               @relation(fields: [workoutId], references: [id], onDelete: Cascade)
@@ -271,4 +276,17 @@ model ExerciseWeight {
 
   @@index([userId, exerciseName])
   @@index([userId, workoutId])
+}
+
+model GeneratedWorkout {
+  id        String   @id @default(cuid())
+  userId    String
+  workoutId String
+  exercises Json     // { exerciseId: string; exerciseName: string }[]
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workout   Workout  @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workoutId])
+  @@index([userId])
 }

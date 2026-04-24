@@ -16,12 +16,20 @@ export const dynamic = "force-dynamic";
 export default async function WorkoutPreviewPage({ params }: { params: Promise<{ workoutId: string }> }) {
   const user = await requireUser();
   const { workoutId } = await params;
-  const workout = await prisma.workout.findUnique({
-    where: { id: workoutId },
-    include: { week: true, blocks: { orderBy: { order: "asc" }, include: { exercises: { orderBy: { order: "asc" } } } } },
-  });
+  const [workout, generatedWorkout] = await Promise.all([
+    prisma.workout.findUnique({
+      where: { id: workoutId },
+      include: { week: true, blocks: { orderBy: { order: "asc" }, include: { exercises: { orderBy: { order: "asc" } } } } },
+    }),
+    prisma.generatedWorkout.findUnique({
+      where: { userId_workoutId: { userId: user.id, workoutId } },
+    }),
+  ]);
   if (!workout) notFound();
   const circuits = calculateCircuitsForWorkout(workout.week.weekNumber, workout);
+  const generatedExercises = generatedWorkout
+    ? (generatedWorkout.exercises as { exerciseId: string; exerciseName: string }[])
+    : undefined;
 
   const allExerciseNames = workout.blocks.flatMap((b) => b.exercises.map((e) => e.name));
 
@@ -68,6 +76,7 @@ export default async function WorkoutPreviewPage({ params }: { params: Promise<{
             userEquipment={userEquipment}
             lastWeights={lastWeights}
             units={user.units}
+            generatedExercises={generatedExercises}
           />
         </section>
         <aside className="grid content-start gap-4">

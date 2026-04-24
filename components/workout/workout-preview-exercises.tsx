@@ -41,6 +41,7 @@ type Props = {
   userEquipment: string[];
   lastWeights: Record<string, number>;
   units: string;
+  generatedExercises?: { exerciseId: string; exerciseName: string }[];
 };
 
 export function WorkoutPreviewExercises({
@@ -50,6 +51,7 @@ export function WorkoutPreviewExercises({
   userEquipment,
   lastWeights,
   units,
+  generatedExercises,
 }: Props) {
   const [subs, setSubs] = useState<WorkoutSubstitutionEntry[]>([]);
   const [weights, setWeights] = useState<Record<string, number>>({});
@@ -89,6 +91,12 @@ export function WorkoutPreviewExercises({
 
   const subsMap = buildSubstitutionMap(subs);
 
+  // Build map of exerciseId -> generated exercise name
+  const generatedMap = new Map<string, string>();
+  for (const entry of generatedExercises ?? []) {
+    generatedMap.set(entry.exerciseId, entry.exerciseName);
+  }
+
   function handleSelect(originalDisplayName: string, sub: SubstituteOption, reason: SubstitutionReason) {
     const baseName = stripTarget(originalDisplayName);
     const next: WorkoutSubstitutionEntry = {
@@ -123,10 +131,15 @@ export function WorkoutPreviewExercises({
                 const currentTarget = targetOverrides[baseName] ?? defaultTarget;
                 const targetChanged = targetOverrides[baseName] !== undefined && targetOverrides[baseName] !== defaultTarget;
                 const swapped = subsMap.get(baseName);
+                const generatedName = generatedMap.get(exercise.id);
                 const swappable = isSwappable(exercise.name);
                 const weighted = isWeightedExercise(exercise.name);
                 const currentWeight = weights[baseName];
                 const isFromHistory = currentWeight !== undefined && lastWeights[baseName] === currentWeight;
+
+                // Resolved display name: substitution > generated > original
+                const displayName = swapped?.substitutedExerciseName ?? generatedName ?? (isMain ? baseName : exercise.name);
+                const originalLabel = swapped ? baseName : (generatedName && generatedName !== baseName ? baseName : null);
 
                 return (
                   <div key={exercise.id} className="rounded-md bg-[#F7F3EA] p-3 text-sm">
@@ -134,15 +147,9 @@ export function WorkoutPreviewExercises({
                       {/* Left: name + editable target for main exercises */}
                       <div className="min-w-0">
                         <div>
-                          {swapped ? (
-                            <>
-                              <span className="font-medium">{swapped.substitutedExerciseName}</span>
-                              <span className="ml-2 text-xs text-[#6B756F]">was: {baseName}</span>
-                            </>
-                          ) : (
-                            <span className="font-medium">
-                              {isMain ? baseName : exercise.name}
-                            </span>
+                          <span className="font-medium">{displayName}</span>
+                          {originalLabel && (
+                            <span className="ml-2 text-xs text-[#6B756F]">was: {originalLabel}</span>
                           )}
                         </div>
                         {isMain && defaultTarget && (

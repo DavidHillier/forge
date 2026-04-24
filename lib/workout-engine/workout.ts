@@ -5,10 +5,12 @@ export type WorkoutForEngine = {
   title: string;
   durationMinutes: number;
   blocks: {
+    id: string;
     name: string;
     order: number;
     blockType: string;
     exercises: {
+      id: string;
       name: string;
       order: number;
       workSeconds: number;

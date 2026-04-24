@@ -5,7 +5,10 @@ import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 import { determineReadinessRecommendation } from "@/lib/readiness/readiness";
+import { filterSubstitutesByEquipment, getCanonicalName, stripTarget } from "@/lib/substitutions/logic";
+import { getSubstitutesForExercise } from "@/lib/substitutions/queries";
 import { determineTrainingLoad } from "@/lib/workout-engine/workout";
+import { CIRCUITS_PER_LEVEL, TOTAL_LEVELS } from "@/lib/level/logic";
 import {
   bodyMetricSchema,
   equipmentProfileSchema,
@@ -45,6 +48,7 @@ export async function saveReadinessAction(formData: FormData) {
 export async function completeWorkoutAction(formData: FormData) {
   const user = await requireUser();
   const parsed = workoutCompletionSchema.parse(Object.fromEntries(formData));
+  const hadFailures = formData.get("hadFailures") === "1";
 
   const rawSubs = formData.get("substitutionsJson");
   const substitutions = rawSubs
@@ -65,6 +69,7 @@ export async function completeWorkoutAction(formData: FormData) {
       roundsCompleted: parsed.roundsCompleted,
       effortScore: parsed.effortScore,
       trainingLoad: determineTrainingLoad(parsed.effortScore),
+      hadFailures,
       notes: parsed.notes,
     },
   });
@@ -93,8 +98,119 @@ export async function completeWorkoutAction(formData: FormData) {
     });
   }
 
+  // Advance level progress only on clean completion
+  if (!hadFailures) {
+    const newCompleted = user.completedCircuitsThisLevel + 1;
+    if (newCompleted >= CIRCUITS_PER_LEVEL) {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          currentLevel: Math.min(user.currentLevel + 1, TOTAL_LEVELS),
+          completedCircuitsThisLevel: 0,
+        },
+      });
+    } else {
+      await prisma.user.update({
+        where: { id: user.id },
+        data: { completedCircuitsThisLevel: newCompleted },
+      });
+    }
+  }
+
+  revalidatePath("/app/today");
   revalidatePath("/app/progress");
   redirect("/app/progress");
+}
+
+export async function generateWorkoutAction(formData: FormData) {
+  const user = await requireUser();
+  const workoutId = formData.get("workoutId") as string;
+  if (!workoutId) return;
+
+  const regenerate = formData.get("regenerate") === "1";
+
+  // Don't regenerate if one already exists (unless regenerate flag is set)
+  const existing = await prisma.generatedWorkout.findUnique({
+    where: { userId_workoutId: { userId: user.id, workoutId } },
+  });
+  if (existing && !regenerate) {
+    revalidatePath(`/app/workout/${workoutId}/preview`);
+    return;
+  }
+  if (existing && regenerate) {
+    await prisma.generatedWorkout.delete({ where: { id: existing.id } });
+  }
+
+  // Load the workout's main block exercises
+  const workout = await prisma.workout.findUnique({
+    where: { id: workoutId },
+    include: {
+      blocks: {
+        where: { blockType: "main" },
+        include: { exercises: { orderBy: { order: "asc" } } },
+      },
+    },
+  });
+  if (!workout) return;
+
+  const userEquipment = (user.equipmentProfile as string[]) ?? [];
+  const mainExercises = workout.blocks[0]?.exercises ?? [];
+
+  // For each exercise slot, pick randomly from canonical + equipment-filtered substitutes
+  const exerciseEntries: { exerciseId: string; exerciseName: string }[] = [];
+  for (const exercise of mainExercises) {
+    const baseName = stripTarget(exercise.name);
+    const canonicalName = getCanonicalName(exercise.name);
+
+    if (!canonicalName) {
+      // Not swappable — keep as-is
+      exerciseEntries.push({ exerciseId: exercise.id, exerciseName: baseName });
+      continue;
+    }
+
+    // Get canonical exercise itself
+    const canonicalExercise = await prisma.canonicalExercise.findUnique({
+      where: { name: canonicalName },
+    });
+
+    // Get all substitutes
+    const substitutes = await getSubstitutesForExercise(canonicalName);
+
+    // Build pool: canonical + substitutes, filter by user equipment
+    type Candidate = { name: string; equipment: string[] };
+    const pool: Candidate[] = [];
+
+    if (canonicalExercise) {
+      pool.push({ name: canonicalExercise.name, equipment: canonicalExercise.equipment as string[] });
+    }
+
+    const equipmentFilteredSubs = filterSubstitutesByEquipment(substitutes, userEquipment);
+    for (const sub of equipmentFilteredSubs) {
+      pool.push({ name: sub.substitute.name, equipment: sub.substitute.equipment as string[] });
+    }
+
+    // Further filter pool by user equipment
+    const available = new Set(userEquipment.map((e) => e.toLowerCase()));
+    const filtered = pool.filter((c) => {
+      if (c.equipment.length === 0 || c.equipment.every((e) => e.toLowerCase() === "bodyweight")) return true;
+      return c.equipment.every((e) => available.has(e.toLowerCase()));
+    });
+
+    const candidates = filtered.length > 0 ? filtered : pool;
+    const picked = candidates[Math.floor(Math.random() * candidates.length)];
+    exerciseEntries.push({ exerciseId: exercise.id, exerciseName: picked?.name ?? baseName });
+  }
+
+  await prisma.generatedWorkout.create({
+    data: {
+      userId: user.id,
+      workoutId,
+      exercises: exerciseEntries,
+    },
+  });
+
+  revalidatePath(`/app/workout/${workoutId}/preview`);
+  revalidatePath("/app/today");
 }
 
 export async function saveBodyMetricAction(formData: FormData) {
