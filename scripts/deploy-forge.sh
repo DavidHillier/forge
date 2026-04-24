@@ -4,6 +4,13 @@ set -euo pipefail
 PROJECT_DIR="/Users/davidhillier/Dropbox/AI Projects/forge"
 BRANCH="main"
 
+pause_before_close() {
+  if [[ -t 0 ]]; then
+    echo "Press any key to close."
+    read -k 1
+  fi
+}
+
 cd "$PROJECT_DIR"
 
 echo ""
@@ -15,8 +22,7 @@ echo ""
 
 if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   echo "This folder is not a Git repository."
-  echo "Press any key to close."
-  read -k 1
+  pause_before_close
   exit 1
 fi
 
@@ -24,15 +30,13 @@ current_branch="$(git branch --show-current)"
 if [[ "$current_branch" != "$BRANCH" ]]; then
   echo "You are on '$current_branch', not '$BRANCH'."
   echo "Switch to main before deploying."
-  echo "Press any key to close."
-  read -k 1
+  pause_before_close
   exit 1
 fi
 
 if ! git remote get-url origin >/dev/null 2>&1; then
   echo "No GitHub remote named origin is configured."
-  echo "Press any key to close."
-  read -k 1
+  pause_before_close
   exit 1
 fi
 
@@ -40,8 +44,7 @@ echo "Checking for local changes..."
 if [[ -z "$(git status --porcelain)" ]]; then
   echo "No local changes to deploy."
   echo ""
-  echo "Press any key to close."
-  read -k 1
+  pause_before_close
   exit 0
 fi
 
@@ -72,5 +75,4 @@ echo ""
 echo "Railway app:"
 echo "https://forge-production-7649.up.railway.app"
 echo ""
-echo "Press any key to close."
-read -k 1
+pause_before_close
