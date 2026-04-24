@@ -62,6 +62,7 @@ export async function getCurrentUser() {
       email: true,
       programmeStartDate: true,
       units: true,
+      equipmentProfile: true,
       createdAt: true,
       updatedAt: true,
     },

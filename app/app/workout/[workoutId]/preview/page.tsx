@@ -3,14 +3,18 @@ import { notFound } from "next/navigation";
 import { AppShell } from "@/components/layout/app-shell";
 import { ButtonLink } from "@/components/ui/button";
 import { Card, SectionTitle } from "@/components/ui/card";
+import { WorkoutPreviewExercises } from "@/components/workout/workout-preview-exercises";
 import { requireUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
+import { getCanonicalName, isSwappable } from "@/lib/substitutions/logic";
+import { getSubstitutesForExercise } from "@/lib/substitutions/queries";
+import type { SubstituteOption } from "@/lib/substitutions/types";
 import { calculateCircuitsForWorkout } from "@/lib/workout-engine/workout";
 
 export const dynamic = "force-dynamic";
 
 export default async function WorkoutPreviewPage({ params }: { params: Promise<{ workoutId: string }> }) {
-  await requireUser();
+  const user = await requireUser();
   const { workoutId } = await params;
   const workout = await prisma.workout.findUnique({
     where: { id: workoutId },
@@ -18,6 +22,18 @@ export default async function WorkoutPreviewPage({ params }: { params: Promise<{
   });
   if (!workout) notFound();
   const circuits = calculateCircuitsForWorkout(workout.week.weekNumber, workout);
+
+  // Pre-fetch substitutes for all swappable exercises in this workout
+  const allExerciseNames = workout.blocks.flatMap((b) => b.exercises.map((e) => e.name));
+  const canonicalNames = [...new Set(allExerciseNames.filter(isSwappable).map((n) => getCanonicalName(n)!))];
+  const substitutesByCanonical: Record<string, SubstituteOption[]> = {};
+  await Promise.all(
+    canonicalNames.map(async (cn) => {
+      substitutesByCanonical[cn] = await getSubstitutesForExercise(cn);
+    }),
+  );
+
+  const userEquipment = Array.isArray(user.equipmentProfile) ? (user.equipmentProfile as string[]) : [];
 
   return (
     <AppShell active="Today">
@@ -29,22 +45,22 @@ export default async function WorkoutPreviewPage({ params }: { params: Promise<{
             <Card className="flex items-center gap-3"><Dumbbell className="text-[#B9903D]" /> {circuits} circuits</Card>
             <Card>{workout.intensity} intensity</Card>
           </div>
-          {workout.blocks.map((block) => (
-            <Card key={block.id}>
-              <div className="mb-3 flex items-center justify-between">
-                <h2 className="font-[var(--font-display)] text-2xl font-semibold">{block.name}</h2>
-                <span className="text-sm text-[#6B756F]">{block.durationMinutes} min</span>
-              </div>
-              <div className="grid gap-2">
-                {block.exercises.map((exercise) => (
-                  <div key={exercise.id} className="flex items-center justify-between rounded-md bg-[#F7F3EA] p-3 text-sm">
-                    <span>{exercise.name}</span>
-                    <span className="text-[#6B756F]">{exercise.workSeconds}s work · {exercise.restSeconds}s rest</span>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          ))}
+          <WorkoutPreviewExercises
+            workoutId={workout.id}
+            blocks={workout.blocks.map((b) => ({
+              id: b.id,
+              name: b.name,
+              durationMinutes: b.durationMinutes,
+              exercises: b.exercises.map((e) => ({
+                id: e.id,
+                name: e.name,
+                workSeconds: e.workSeconds,
+                restSeconds: e.restSeconds,
+              })),
+            }))}
+            substitutesByCanonical={substitutesByCanonical}
+            userEquipment={userEquipment}
+          />
         </section>
         <aside className="grid content-start gap-4">
           <Card>

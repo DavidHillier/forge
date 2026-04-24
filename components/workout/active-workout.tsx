@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Pause, Play, SkipForward, X } from "lucide-react";
 import { Button, ButtonLink } from "@/components/ui/button";
+import { buildSubstitutionMap, loadSubstitutions, stripTarget } from "@/lib/substitutions/logic";
 import type { WorkoutForEngine } from "@/lib/workout-engine/workout";
 import { buildWorkoutIntervalSequence } from "@/lib/workout-engine/workout";
 
@@ -12,8 +13,19 @@ export function ActiveWorkout({ workout, weekNumber }: { workout: WorkoutForEngi
   const [remaining, setRemaining] = useState(intervals[0]?.seconds ?? 0);
   const [running, setRunning] = useState(false);
   const [showCue, setShowCue] = useState(false);
+  const [subsMap, setSubsMap] = useState(() => new Map<string, { substitutedExerciseName: string }>());
   const current = intervals[index];
   const next = intervals[index + 1];
+
+  useEffect(() => {
+    const stored = loadSubstitutions(workout.id);
+    setSubsMap(buildSubstitutionMap(stored));
+  }, [workout.id]);
+
+  function resolvedName(name: string): string {
+    const base = stripTarget(name);
+    return subsMap.get(base)?.substitutedExerciseName ?? name;
+  }
 
   useEffect(() => {
     if (!running || !current) return;
@@ -48,9 +60,12 @@ export function ActiveWorkout({ workout, weekNumber }: { workout: WorkoutForEngi
         <section className="text-center">
           <p className="mb-4 text-sm text-[#F7F3EA]/70">Week {weekNumber} · {current.block}</p>
           <div className="mb-4 text-7xl font-semibold tabular-nums text-[#E2C478]">{mm}:{ss}</div>
-          <h1 className="font-[var(--font-display)] text-3xl font-semibold">{current.exercise}</h1>
+          <h1 className="font-[var(--font-display)] text-3xl font-semibold">{resolvedName(current.exercise)}</h1>
+          {resolvedName(current.exercise) !== current.exercise && (
+            <p className="mt-0.5 text-xs text-[#F7F3EA]/50">Originally: {stripTarget(current.exercise)}</p>
+          )}
           <p className="mt-1 text-sm uppercase tracking-[0.16em] text-[#F7F3EA]/70">{current.status === "work" ? "Work" : "Rest"} · Round {current.round}</p>
-          {next ? <p className="mt-8 text-sm text-[#F7F3EA]/75">Up next<br /><span className="text-lg text-white">{next.exercise}</span></p> : null}
+          {next ? <p className="mt-8 text-sm text-[#F7F3EA]/75">Up next<br /><span className="text-lg text-white">{resolvedName(next.exercise)}</span></p> : null}
         </section>
         <div className="grid grid-cols-3 gap-3">
           <Button type="button" variant="ghost" className="h-16 flex-col gap-1 rounded-full bg-transparent text-white" onClick={() => setRunning(!running)}>

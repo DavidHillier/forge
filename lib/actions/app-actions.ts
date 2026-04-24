@@ -8,8 +8,10 @@ import { determineReadinessRecommendation } from "@/lib/readiness/readiness";
 import { determineTrainingLoad } from "@/lib/workout-engine/workout";
 import {
   bodyMetricSchema,
+  equipmentProfileSchema,
   readinessSchema,
   settingsUpdateSchema,
+  substitutionsJsonSchema,
   weeklyReflectionSchema,
   workoutCompletionSchema,
 } from "@/lib/validation/schemas";
@@ -43,7 +45,12 @@ export async function completeWorkoutAction(formData: FormData) {
   const user = await requireUser();
   const parsed = workoutCompletionSchema.parse(Object.fromEntries(formData));
 
-  await prisma.workoutCompletion.create({
+  const rawSubs = formData.get("substitutionsJson");
+  const substitutions = rawSubs
+    ? substitutionsJsonSchema.parse(JSON.parse(rawSubs as string))
+    : [];
+
+  const completion = await prisma.workoutCompletion.create({
     data: {
       userId: user.id,
       workoutId: parsed.workoutId,
@@ -55,6 +62,19 @@ export async function completeWorkoutAction(formData: FormData) {
       notes: parsed.notes,
     },
   });
+
+  if (substitutions.length > 0) {
+    await prisma.workoutSubstitution.createMany({
+      data: substitutions.map((s) => ({
+        userId: user.id,
+        workoutId: parsed.workoutId,
+        workoutCompletionId: completion.id,
+        originalExerciseName: s.originalExerciseName,
+        substitutedExerciseName: s.substitutedExerciseName,
+        substitutionReason: s.substitutionReason,
+      })),
+    });
+  }
 
   revalidatePath("/app/progress");
   redirect("/app/progress");
@@ -102,6 +122,19 @@ export async function updateSettingsAction(formData: FormData) {
 
   revalidatePath("/app/settings");
   revalidatePath("/app/today");
+}
+
+export async function updateEquipmentProfileAction(formData: FormData) {
+  const user = await requireUser();
+  const raw = formData.getAll("equipment");
+  const equipmentProfile = equipmentProfileSchema.parse(raw);
+
+  await prisma.user.update({
+    where: { id: user.id },
+    data: { equipmentProfile },
+  });
+
+  revalidatePath("/app/settings");
 }
 
 export async function resetProgrammeDataAction() {

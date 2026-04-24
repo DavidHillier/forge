@@ -50,3 +50,25 @@ export const settingsUpdateSchema = z.object({
   programmeStartDate: z.coerce.date(),
   units: z.enum(["metric", "imperial"]),
 });
+
+export const equipmentProfileSchema = z.array(z.string());
+
+export const substitutionReasonSchema = z.enum([
+  "closest_match",
+  "no_equipment",
+  "easier",
+  "harder",
+  "joint_friendly",
+  "equipment_unavailable",
+  "bodyweight",
+  "heavier_strength",
+  "conditioning",
+]);
+
+export const substitutionsJsonSchema = z.array(
+  z.object({
+    originalExerciseName: z.string(),
+    substitutedExerciseName: z.string(),
+    substitutionReason: substitutionReasonSchema,
+  }),
+);

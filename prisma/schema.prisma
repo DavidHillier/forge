@@ -38,6 +38,8 @@ model User {
   weeklyReflections  WeeklyReflection[]
   consents           UserConsent[]
   exportRequests     DataExportRequest[]
+  substitutions      WorkoutSubstitution[]
+  equipmentProfile   Json                  @default("[]") // string[]
 }
 
 model Programme {
@@ -80,10 +82,11 @@ model Workout {
   description     String
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
-  week            Week                @relation(fields: [weekId], references: [id], onDelete: Cascade)
+  week            Week                  @relation(fields: [weekId], references: [id], onDelete: Cascade)
   blocks          WorkoutBlock[]
   completions     WorkoutCompletion[]
   readinessChecks ReadinessCheck[]
+  substitutions   WorkoutSubstitution[]
 
   @@unique([weekId, dayNumber])
 }
@@ -127,8 +130,9 @@ model WorkoutCompletion {
   effortScore       Int
   trainingLoad      TrainingLoad
   notes             String?
-  user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workout           Workout      @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+  user              User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workout           Workout               @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+  substitutions     WorkoutSubstitution[]
 
   @@index([userId, completedAt])
 }
@@ -192,4 +196,63 @@ model DataExportRequest {
   requestedAt DateTime  @default(now())
   completedAt DateTime?
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ─── Exercise Catalogue ──────────────────────────────────────────────────────
+
+model CanonicalExercise {
+  id               String               @id @default(cuid())
+  name             String               @unique
+  description      String               @default("")
+  movementPattern  String
+  primaryMuscles   Json                 // string[]
+  secondaryMuscles Json                 @default("[]") // string[]
+  equipment        Json                 // string[]
+  difficulty       String               // "beginner" | "moderate" | "advanced"
+  impactLevel      String               // "low" | "moderate" | "high"
+  jointStressLevel String               // "low" | "moderate" | "high"
+  isCanonical      Boolean              @default(false)
+  formCues         Json                 @default("[]") // string[]
+  safetyCue        String               @default("Stop if you feel sharp pain or dizziness.")
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  asCanonical      ExerciseSubstitute[] @relation("CanonicalExercise")
+  asSubstitute     ExerciseSubstitute[] @relation("SubstituteExercise")
+}
+
+model ExerciseSubstitute {
+  id                   String            @id @default(cuid())
+  canonicalExerciseId  String
+  substituteExerciseId String
+  substitutionReasons  Json              // SubstitutionReason[]
+  matchQuality         String            // "excellent" | "good" | "fair"
+  intensityChange      String            @default("same") // "lower" | "same" | "higher"
+  difficultyChange     String            @default("same") // "easier" | "same" | "harder"
+  recommendationRank   Int               @default(5)
+  scalingNote          String?
+  cautionNote          String?
+  isAdvanced           Boolean           @default(false)
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+  canonical            CanonicalExercise @relation("CanonicalExercise", fields: [canonicalExerciseId], references: [id], onDelete: Cascade)
+  substitute           CanonicalExercise @relation("SubstituteExercise", fields: [substituteExerciseId], references: [id], onDelete: Cascade)
+
+  @@unique([canonicalExerciseId, substituteExerciseId])
+  @@index([canonicalExerciseId])
+}
+
+model WorkoutSubstitution {
+  id                      String             @id @default(cuid())
+  userId                  String
+  workoutId               String
+  workoutCompletionId     String?
+  originalExerciseName    String
+  substitutedExerciseName String
+  substitutionReason      String
+  createdAt               DateTime           @default(now())
+  user                    User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workout                 Workout            @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+  completion              WorkoutCompletion? @relation(fields: [workoutCompletionId], references: [id], onDelete: SetNull)
+
+  @@index([userId, workoutId])
 }
