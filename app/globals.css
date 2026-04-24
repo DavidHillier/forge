@@ -1,0 +1,54 @@
+@import "tailwindcss";
+
+:root {
+  --background: #fbf8f1;
+  --foreground: #10251d;
+  --forest: #0f4a32;
+  --deep: #073b29;
+  --dark: #082f23;
+  --gold: #c9a24d;
+  --muted-gold: #b9903d;
+  --cream: #f7f3ea;
+  --border: #e4dccb;
+  --muted: #6b756f;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at top left, rgba(201, 162, 77, 0.13), transparent 28rem),
+    var(--background);
+  color: var(--foreground);
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+.forge-card {
+  border: 1px solid var(--border);
+  background: rgba(251, 248, 241, 0.92);
+  box-shadow: 0 16px 40px rgba(8, 47, 35, 0.08);
+}
+
+.gold-gradient {
+  background: linear-gradient(135deg, #d8ba70, #b9903d);
+}
+
+.green-gradient {
+  background: linear-gradient(160deg, #0f4a32, #073b29 60%, #082f23);
+}

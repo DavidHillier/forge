@@ -1,0 +1,195 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Units {
+  metric
+  imperial
+}
+
+enum Phase {
+  BUILD_UP
+  MAIN_COURSE
+}
+
+enum TrainingLoad {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+model User {
+  id                 String              @id @default(cuid())
+  name               String
+  email              String              @unique
+  passwordHash       String
+  programmeStartDate DateTime
+  units              Units               @default(metric)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  completions        WorkoutCompletion[]
+  readinessChecks    ReadinessCheck[]
+  bodyMetrics        BodyMetric[]
+  weeklyReflections  WeeklyReflection[]
+  consents           UserConsent[]
+  exportRequests     DataExportRequest[]
+}
+
+model Programme {
+  id          String   @id @default(cuid())
+  name        String
+  description String
+  totalWeeks  Int
+  totalDays   Int
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  weeks       Week[]
+}
+
+model Week {
+  id                   String    @id @default(cuid())
+  programmeId          String
+  weekNumber           Int       @unique
+  phase                Phase
+  title                String
+  theme                String
+  objective            String
+  circuitCount         Int?
+  mainCourseWeekNumber Int?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  programme            Programme @relation(fields: [programmeId], references: [id], onDelete: Cascade)
+  workouts             Workout[]
+}
+
+model Workout {
+  id              String              @id @default(cuid())
+  weekId          String
+  dayNumber       Int
+  title           String
+  type            String
+  durationMinutes Int
+  intensity       String
+  circuitCount    Int?
+  equipment       Json
+  description     String
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  week            Week                @relation(fields: [weekId], references: [id], onDelete: Cascade)
+  blocks          WorkoutBlock[]
+  completions     WorkoutCompletion[]
+  readinessChecks ReadinessCheck[]
+
+  @@unique([weekId, dayNumber])
+}
+
+model WorkoutBlock {
+  id              String     @id @default(cuid())
+  workoutId       String
+  name            String
+  order           Int
+  durationMinutes Int
+  blockType       String
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  workout         Workout    @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+  exercises       Exercise[]
+}
+
+model Exercise {
+  id             String       @id @default(cuid())
+  workoutBlockId String
+  name           String
+  order          Int
+  workSeconds    Int
+  restSeconds    Int
+  rounds         Int
+  formCues       Json
+  safetyCue      String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  workoutBlock   WorkoutBlock @relation(fields: [workoutBlockId], references: [id], onDelete: Cascade)
+}
+
+model WorkoutCompletion {
+  id                String       @id @default(cuid())
+  userId            String
+  workoutId         String
+  completedAt       DateTime     @default(now())
+  totalSeconds      Int
+  circuitsCompleted Int
+  roundsCompleted   Int
+  effortScore       Int
+  trainingLoad      TrainingLoad
+  notes             String?
+  user              User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workout           Workout      @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+
+  @@index([userId, completedAt])
+}
+
+model ReadinessCheck {
+  id             String   @id @default(cuid())
+  userId         String
+  workoutId      String
+  date           DateTime @default(now())
+  sleepQuality   String
+  soreness       String
+  energyLevel    String
+  timeAvailable  String
+  recommendation String
+  createdAt      DateTime @default(now())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workout        Workout  @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+}
+
+model BodyMetric {
+  id               String   @id @default(cuid())
+  userId           String
+  date             DateTime @default(now())
+  weight           Float?
+  waist            Float?
+  restingHeartRate Int?
+  note             String?
+  progressPhotoUrl String?
+  createdAt        DateTime @default(now())
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model WeeklyReflection {
+  id         String   @id @default(cuid())
+  userId     String
+  weekNumber Int
+  energy     Int
+  sleep      Int
+  soreness   Int
+  motivation Int
+  notes      String?
+  createdAt  DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, weekNumber])
+}
+
+model UserConsent {
+  id                String   @id @default(cuid())
+  userId            String
+  privacyAcceptedAt DateTime
+  termsAcceptedAt   DateTime
+  createdAt         DateTime @default(now())
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model DataExportRequest {
+  id          String    @id @default(cuid())
+  userId      String
+  status      String    @default("requested")
+  requestedAt DateTime  @default(now())
+  completedAt DateTime?
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
