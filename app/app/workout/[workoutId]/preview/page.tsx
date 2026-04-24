@@ -55,6 +55,7 @@ export default async function WorkoutPreviewPage({ params }: { params: Promise<{
             blocks={workout.blocks.map((b) => ({
               id: b.id,
               name: b.name,
+              blockType: b.blockType,
               durationMinutes: b.durationMinutes,
               exercises: b.exercises.map((e) => ({
                 id: e.id,

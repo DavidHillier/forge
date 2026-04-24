@@ -4,8 +4,13 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
 import { Button, ButtonLink } from "@/components/ui/button";
-import { buildSubstitutionMap, loadSubstitutions, stripTarget } from "@/lib/substitutions/logic";
-import { isWeightedExercise } from "@/lib/substitutions/logic";
+import {
+  buildSubstitutionMap,
+  extractTarget,
+  loadSubstitutions,
+  loadTargetOverrides,
+  stripTarget,
+} from "@/lib/substitutions/logic";
 import type { WorkoutForEngine } from "@/lib/workout-engine/workout";
 import { calculateCircuitsForWorkout } from "@/lib/workout-engine/workout";
 
@@ -42,6 +47,8 @@ export function ActiveWorkout({
     () => buildSubstitutionMap(loadSubstitutions(workout.id)),
     [workout.id],
   );
+
+  const targetOverrides = useMemo(() => loadTargetOverrides(workout.id), [workout.id]);
 
   const [state, setState] = useState<ActiveState>({
     blockIdx: 0,
@@ -143,10 +150,13 @@ export function ActiveWorkout({
     ? currentExercise!.formCues.map(String)
     : [];
 
-  const displayName = currentExercise ? resolvedName(currentExercise.name) : "";
   const originalBaseName = currentExercise ? stripTarget(currentExercise.name) : "";
-  const wasSubstituted = displayName !== currentExercise?.name;
-  const weighted = currentExercise ? isWeightedExercise(currentExercise.name) : false;
+  const displayName = currentExercise ? resolvedName(currentExercise.name) : "";
+  // For substitutes the resolved name may already be the full name (no target suffix)
+  const displayBaseName = stripTarget(displayName);
+  const wasSubstituted = displayBaseName !== originalBaseName;
+  const defaultTarget = currentExercise ? extractTarget(currentExercise.name) : "";
+  const activeTarget = targetOverrides[originalBaseName] ?? defaultTarget;
 
   const circuitLabel = isMainBlock
     ? `Circuit ${state.circuitsClean + 1} of ${circuitsRequired}`
@@ -183,10 +193,13 @@ export function ActiveWorkout({
                 {state.exerciseIdx + 1} / {exercises.length}
               </p>
               <h1 className="font-[var(--font-display)] text-4xl font-bold leading-tight">
-                {displayName}
+                {displayBaseName}
               </h1>
+              {activeTarget && (
+                <p className="mt-2 text-lg text-[#C9A84C] font-semibold tabular-nums">{activeTarget}</p>
+              )}
               {wasSubstituted && (
-                <p className="mt-2 text-xs text-[#F7F3EA]/40">Originally: {originalBaseName}</p>
+                <p className="mt-1 text-xs text-[#F7F3EA]/40">Originally: {originalBaseName}</p>
               )}
               <button
                 onClick={() => setShowCue(true)}
@@ -196,8 +209,8 @@ export function ActiveWorkout({
               </button>
             </section>
 
-            <div className={`grid gap-3 ${weighted ? "grid-cols-2" : "grid-cols-1"}`}>
-              {weighted && (
+            <div className={`grid gap-3 ${isMainBlock ? "grid-cols-2" : "grid-cols-1"}`}>
+              {isMainBlock && (
                 <button
                   onClick={handleFail}
                   className="h-16 rounded-full border border-[#B94A48]/50 bg-[#B94A48]/20 text-[#F7A9A7] text-base font-semibold transition hover:bg-[#B94A48]/35"
@@ -270,7 +283,7 @@ export function ActiveWorkout({
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/45 p-4">
           <div className="w-full max-w-sm rounded-lg bg-[#FBF8F1] p-5 text-[#10251D]">
             <div className="mb-4 flex items-center justify-between">
-              <h2 className="font-[var(--font-display)] text-xl font-semibold">{displayName}</h2>
+              <h2 className="font-[var(--font-display)] text-xl font-semibold">{displayBaseName}</h2>
               <button onClick={() => setShowCue(false)}>
                 <X size={18} />
               </button>

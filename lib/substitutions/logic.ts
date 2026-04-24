@@ -35,6 +35,12 @@ export function stripTarget(exerciseName: string): string {
   return exerciseName.replace(/\s*\([^)]*\)\s*$/, "").trim();
 }
 
+// Extract the target string from inside the parentheses, e.g. "Squat (12)" → "12"
+export function extractTarget(exerciseName: string): string {
+  const match = exerciseName.match(/\(([^)]+)\)\s*$/);
+  return match ? match[1] : "";
+}
+
 export function getCanonicalName(exerciseName: string): string | null {
   const base = stripTarget(exerciseName);
   return WORKOUT_TO_CANONICAL_NAME[base] ?? null;
@@ -184,6 +190,26 @@ export function saveWeights(workoutId: string, weights: Record<string, number>):
 export function clearWeights(workoutId: string): void {
   if (typeof window === "undefined") return;
   window.sessionStorage.removeItem(`${WEIGHTS_PREFIX}${workoutId}`);
+}
+
+// Rep / target override sessionStorage helpers
+const TARGETS_PREFIX = "forge_targets_";
+
+export function loadTargetOverrides(workoutId: string): Record<string, string> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.sessionStorage.getItem(`${TARGETS_PREFIX}${workoutId}`);
+    return raw ? (JSON.parse(raw) as Record<string, string>) : {};
+  } catch {
+    return {};
+  }
+}
+
+export function saveTargetOverrides(workoutId: string, overrides: Record<string, string>): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(`${TARGETS_PREFIX}${workoutId}`, JSON.stringify(overrides));
+  } catch {}
 }
 
 // Build a substitution lookup map keyed by original exercise base name
