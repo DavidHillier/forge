@@ -66,6 +66,7 @@ export function ActiveWorkout({
   const sequence = useMemo<SequenceItem[]>(() => {
     const items: SequenceItem[] = [];
     for (const block of blocks) {
+      if (block.blockType === "warmup" || block.blockType === "cooldown") continue;
       const sortedExercises = block.exercises.slice().sort((a, b) => a.order - b.order);
       const times = block.blockType === "main" ? circuitsRequired : 1;
       for (let ci = 0; ci < times; ci++) {

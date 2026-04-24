@@ -116,7 +116,7 @@ export function WorkoutPreviewExercises({
 
   return (
     <>
-      {blocks.map((block) => {
+      {blocks.filter((b) => b.blockType !== "warmup" && b.blockType !== "cooldown").map((block) => {
         const isMain = block.blockType === "main";
         return (
           <div key={block.id} className="rounded-xl border border-[#E4DCCB] bg-white p-5">
