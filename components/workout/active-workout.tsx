@@ -35,7 +35,7 @@ export function ActiveWorkout({ workout, weekNumber }: { workout: WorkoutForEngi
   if (!current) return null;
   const mm = String(Math.floor(remaining / 60)).padStart(2, "0");
   const ss = String(remaining % 60).padStart(2, "0");
-  const completeHref = `/app/workout/${workout.id}/complete?total=${intervals.reduce((sum, item) => sum + item.seconds, 0)}&circuits=${weekNumber <= 3 ? weekNumber : 4}&rounds=${intervals.length}`;
+  const completeHref = `/app/workout/${workout.id}/complete?total=${intervals.reduce((sum, item) => sum + item.seconds, 0)}&circuits=${workout.circuitCount ?? (weekNumber <= 3 ? weekNumber : 4)}&rounds=${intervals.length}`;
 
   return (
     <div className="green-gradient min-h-screen px-4 py-6 text-white">

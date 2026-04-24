@@ -23,12 +23,12 @@ export function determinePhase(weekNumber: number): ProgrammePhase {
 export function determineCircuitCount(weekNumber: number) {
   if (weekNumber <= 0) return 0;
   if (weekNumber <= 3) return weekNumber;
-  if (weekNumber === 4) return 3;
-  if (weekNumber === 5) return 3;
-  if (weekNumber === 6) return 4;
-  if (weekNumber === 7) return 3;
-  if (weekNumber === 8) return 4;
-  return 4;
+  if (weekNumber === 4) return 4;
+  if (weekNumber === 5) return 4;
+  if (weekNumber === 6) return 5;
+  if (weekNumber === 7) return 5;
+  if (weekNumber === 8) return 6;
+  return 6;
 }
 
 export function isBuildUpPhase(weekNumber: number) {

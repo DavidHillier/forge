@@ -1,6 +1,7 @@
 import { determineCircuitCount } from "@/lib/programme/programme";
 
 export type WorkoutForEngine = {
+  circuitCount?: number | null;
   title: string;
   durationMinutes: number;
   blocks: {
@@ -32,8 +33,11 @@ export type WorkoutInterval = {
 export function buildWorkoutIntervalSequence(workout: WorkoutForEngine) {
   return workout.blocks
     .sort((a, b) => a.order - b.order)
-    .flatMap((block) =>
-      block.exercises
+    .flatMap((block) => {
+      const blockRepeatCount = block.blockType === "main" ? Math.max(1, workout.circuitCount ?? 1) : 1;
+
+      return Array.from({ length: blockRepeatCount }).flatMap((_, circuitIndex) =>
+        block.exercises
         .sort((a, b) => a.order - b.order)
         .flatMap((exercise) => {
           const rounds = Math.max(1, exercise.rounds);
@@ -41,7 +45,7 @@ export function buildWorkoutIntervalSequence(workout: WorkoutForEngine) {
           return Array.from({ length: rounds }).flatMap((_, index) => {
             const intervals: WorkoutInterval[] = [
               {
-                block: block.name,
+                block: blockRepeatCount > 1 ? `${block.name} · Circuit ${circuitIndex + 1} of ${blockRepeatCount}` : block.name,
                 exercise: exercise.name,
                 status: "work",
                 seconds: exercise.workSeconds,
@@ -52,7 +56,7 @@ export function buildWorkoutIntervalSequence(workout: WorkoutForEngine) {
             ];
             if (exercise.restSeconds > 0) {
               intervals.push({
-                block: block.name,
+                block: blockRepeatCount > 1 ? `${block.name} · Circuit ${circuitIndex + 1} of ${blockRepeatCount}` : block.name,
                 exercise: "Rest",
                 status: "rest",
                 seconds: exercise.restSeconds,
@@ -64,7 +68,8 @@ export function buildWorkoutIntervalSequence(workout: WorkoutForEngine) {
             return intervals;
           });
         }),
-    );
+      );
+    });
 }
 
 export function calculateWorkoutDuration(workout: WorkoutForEngine) {
