@@ -6,8 +6,8 @@ import { Card, SectionTitle } from "@/components/ui/card";
 import { WorkoutPreviewExercises } from "@/components/workout/workout-preview-exercises";
 import { requireUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
-import { getCanonicalName, isSwappable } from "@/lib/substitutions/logic";
-import { getSubstitutesForExercise } from "@/lib/substitutions/queries";
+import { getCanonicalName, isSwappable, isWeightedExercise, stripTarget } from "@/lib/substitutions/logic";
+import { getLastWeightsForExercises, getSubstitutesForExercise } from "@/lib/substitutions/queries";
 import type { SubstituteOption } from "@/lib/substitutions/types";
 import { calculateCircuitsForWorkout } from "@/lib/workout-engine/workout";
 
@@ -23,8 +23,9 @@ export default async function WorkoutPreviewPage({ params }: { params: Promise<{
   if (!workout) notFound();
   const circuits = calculateCircuitsForWorkout(workout.week.weekNumber, workout);
 
-  // Pre-fetch substitutes for all swappable exercises in this workout
   const allExerciseNames = workout.blocks.flatMap((b) => b.exercises.map((e) => e.name));
+
+  // Pre-fetch substitutes for all swappable exercises
   const canonicalNames = [...new Set(allExerciseNames.filter(isSwappable).map((n) => getCanonicalName(n)!))];
   const substitutesByCanonical: Record<string, SubstituteOption[]> = {};
   await Promise.all(
@@ -32,6 +33,10 @@ export default async function WorkoutPreviewPage({ params }: { params: Promise<{
       substitutesByCanonical[cn] = await getSubstitutesForExercise(cn);
     }),
   );
+
+  // Pre-fetch last weights for weighted exercises
+  const weightedBaseNames = [...new Set(allExerciseNames.filter(isWeightedExercise).map(stripTarget))];
+  const lastWeights = await getLastWeightsForExercises(user.id, weightedBaseNames);
 
   const userEquipment = Array.isArray(user.equipmentProfile) ? (user.equipmentProfile as string[]) : [];
 
@@ -60,6 +65,8 @@ export default async function WorkoutPreviewPage({ params }: { params: Promise<{
             }))}
             substitutesByCanonical={substitutesByCanonical}
             userEquipment={userEquipment}
+            lastWeights={lastWeights}
+            units={user.units}
           />
         </section>
         <aside className="grid content-start gap-4">

@@ -7,8 +7,11 @@ import {
   buildSubstitutionMap,
   getCanonicalName,
   isSwappable,
+  isWeightedExercise,
   loadSubstitutions,
+  loadWeights,
   saveSubstitutions,
+  saveWeights,
   stripTarget,
 } from "@/lib/substitutions/logic";
 import type { SubstituteOption, SubstitutionReason, WorkoutSubstitutionEntry } from "@/lib/substitutions/types";
@@ -32,15 +35,34 @@ type Props = {
   blocks: Block[];
   substitutesByCanonical: Record<string, SubstituteOption[]>;
   userEquipment: string[];
+  lastWeights: Record<string, number>;
+  units: string;
 };
 
-export function WorkoutPreviewExercises({ workoutId, blocks, substitutesByCanonical, userEquipment }: Props) {
+export function WorkoutPreviewExercises({ workoutId, blocks, substitutesByCanonical, userEquipment, lastWeights, units }: Props) {
   const [subs, setSubs] = useState<WorkoutSubstitutionEntry[]>([]);
+  const [weights, setWeights] = useState<Record<string, number>>({});
   const [sheetFor, setSheetFor] = useState<string | null>(null); // exercise display name
+  const unitLabel = units === "imperial" ? "lb" : "kg";
 
   useEffect(() => {
     setSubs(loadSubstitutions(workoutId));
-  }, [workoutId]);
+    const stored = loadWeights(workoutId);
+    // Merge stored weights over lastWeights so session edits persist on re-render
+    setWeights({ ...lastWeights, ...stored });
+  }, [workoutId, lastWeights]);
+
+  function handleWeightChange(baseName: string, value: string) {
+    const num = parseFloat(value);
+    const next = { ...weights };
+    if (!value || isNaN(num)) {
+      delete next[baseName];
+    } else {
+      next[baseName] = num;
+    }
+    setWeights(next);
+    saveWeights(workoutId, next);
+  }
 
   const subsMap = buildSubstitutionMap(subs);
 
@@ -74,30 +96,55 @@ export function WorkoutPreviewExercises({ workoutId, blocks, substitutesByCanoni
               const baseName = stripTarget(exercise.name);
               const swapped = subsMap.get(baseName);
               const swappable = isSwappable(exercise.name);
+              const weighted = isWeightedExercise(exercise.name);
+              const currentWeight = weights[baseName];
+              const isFromHistory = currentWeight !== undefined && lastWeights[baseName] === currentWeight;
               return (
-                <div key={exercise.id} className="flex items-center justify-between rounded-md bg-[#F7F3EA] p-3 text-sm">
-                  <div>
-                    {swapped ? (
-                      <>
-                        <span className="font-medium">{swapped.substitutedExerciseName}</span>
-                        <span className="ml-2 text-xs text-[#6B756F]">was: {baseName}</span>
-                      </>
-                    ) : (
-                      <span>{exercise.name}</span>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className="text-[#6B756F]">{exercise.workSeconds}s work · {exercise.restSeconds}s rest</span>
-                    {swappable && (
-                      <button
-                        onClick={() => setSheetFor(exercise.name)}
-                        className="flex items-center gap-1 rounded-md bg-[#1B3D2F] px-2 py-1 text-xs text-white hover:bg-[#0F4A32] transition-colors"
-                        title="Swap exercise"
-                      >
-                        <ArrowLeftRight size={12} />
-                        {swapped ? "Re-swap" : "Swap"}
-                      </button>
-                    )}
+                <div key={exercise.id} className="rounded-md bg-[#F7F3EA] p-3 text-sm">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      {swapped ? (
+                        <>
+                          <span className="font-medium">{swapped.substitutedExerciseName}</span>
+                          <span className="ml-2 text-xs text-[#6B756F]">was: {baseName}</span>
+                        </>
+                      ) : (
+                        <span>{exercise.name}</span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {weighted && (
+                        <div className="flex flex-col items-end">
+                          <div className="flex items-center gap-1">
+                            <input
+                              type="number"
+                              inputMode="decimal"
+                              step="0.5"
+                              min="0"
+                              value={currentWeight ?? ""}
+                              onChange={(e) => handleWeightChange(baseName, e.target.value)}
+                              placeholder="—"
+                              className="w-16 rounded border border-[#D9D0BE] bg-white px-2 py-1 text-right text-sm tabular-nums focus:border-[#1B3D2F] focus:outline-none"
+                            />
+                            <span className="text-xs text-[#6B756F]">{unitLabel}</span>
+                          </div>
+                          {isFromHistory && (
+                            <span className="mt-0.5 text-[10px] text-[#9BA89E]">prev session</span>
+                          )}
+                        </div>
+                      )}
+                      <span className="text-[#6B756F]">{exercise.workSeconds}s · {exercise.restSeconds}s rest</span>
+                      {swappable && (
+                        <button
+                          onClick={() => setSheetFor(exercise.name)}
+                          className="flex items-center gap-1 rounded-md bg-[#1B3D2F] px-2 py-1 text-xs text-white hover:bg-[#0F4A32] transition-colors"
+                          title="Swap exercise"
+                        >
+                          <ArrowLeftRight size={12} />
+                          {swapped ? "Re-swap" : "Swap"}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               );

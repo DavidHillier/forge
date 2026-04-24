@@ -121,6 +121,15 @@ export function getRecommendedSubstitutes(
   return rankSubstitutes(substitutes, reason, userEquipment);
 }
 
+const WEIGHTED_PREFIXES = ["Dumbbell", "Barbell", "Kettlebell"];
+const WEIGHTED_EXACT = new Set(["Push-up renegade row"]);
+
+export function isWeightedExercise(exerciseName: string): boolean {
+  const canonical = getCanonicalName(exerciseName);
+  if (!canonical) return false;
+  return WEIGHTED_PREFIXES.some((p) => canonical.startsWith(p)) || WEIGHTED_EXACT.has(canonical);
+}
+
 // sessionStorage helpers
 const STORAGE_PREFIX = "forge_subs_";
 
@@ -150,6 +159,31 @@ export function saveSubstitutions(workoutId: string, subs: WorkoutSubstitutionEn
 export function clearSubstitutions(workoutId: string): void {
   if (typeof window === "undefined") return;
   window.sessionStorage.removeItem(getStorageKey(workoutId));
+}
+
+// Exercise weight sessionStorage helpers
+const WEIGHTS_PREFIX = "forge_weights_";
+
+export function loadWeights(workoutId: string): Record<string, number> {
+  if (typeof window === "undefined") return {};
+  try {
+    const raw = window.sessionStorage.getItem(`${WEIGHTS_PREFIX}${workoutId}`);
+    return raw ? (JSON.parse(raw) as Record<string, number>) : {};
+  } catch {
+    return {};
+  }
+}
+
+export function saveWeights(workoutId: string, weights: Record<string, number>): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(`${WEIGHTS_PREFIX}${workoutId}`, JSON.stringify(weights));
+  } catch {}
+}
+
+export function clearWeights(workoutId: string): void {
+  if (typeof window === "undefined") return;
+  window.sessionStorage.removeItem(`${WEIGHTS_PREFIX}${workoutId}`);
 }
 
 // Build a substitution lookup map keyed by original exercise base name

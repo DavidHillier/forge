@@ -33,6 +33,24 @@ export async function getSubstitutesForExercise(canonicalName: string): Promise<
   })) as SubstituteOption[];
 }
 
+export async function getLastWeightsForExercises(
+  userId: string,
+  exerciseBaseNames: string[],
+): Promise<Record<string, number>> {
+  if (exerciseBaseNames.length === 0) return {};
+  const rows = await prisma.exerciseWeight.findMany({
+    where: { userId, exerciseName: { in: exerciseBaseNames } },
+    orderBy: { loggedAt: "desc" },
+  });
+  const result: Record<string, number> = {};
+  for (const row of rows) {
+    if (!(row.exerciseName in result)) {
+      result[row.exerciseName] = row.weight;
+    }
+  }
+  return result;
+}
+
 export async function getRecommendedSubstitutesForExercise(
   canonicalName: string,
   reason: SubstitutionReason,

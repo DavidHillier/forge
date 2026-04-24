@@ -12,6 +12,7 @@ import {
   readinessSchema,
   settingsUpdateSchema,
   substitutionsJsonSchema,
+  weightsJsonSchema,
   weeklyReflectionSchema,
   workoutCompletionSchema,
 } from "@/lib/validation/schemas";
@@ -50,6 +51,11 @@ export async function completeWorkoutAction(formData: FormData) {
     ? substitutionsJsonSchema.parse(JSON.parse(rawSubs as string))
     : [];
 
+  const rawWeights = formData.get("weightsJson");
+  const weights = rawWeights
+    ? weightsJsonSchema.parse(JSON.parse(rawWeights as string))
+    : [];
+
   const completion = await prisma.workoutCompletion.create({
     data: {
       userId: user.id,
@@ -72,6 +78,17 @@ export async function completeWorkoutAction(formData: FormData) {
         originalExerciseName: s.originalExerciseName,
         substitutedExerciseName: s.substitutedExerciseName,
         substitutionReason: s.substitutionReason,
+      })),
+    });
+  }
+
+  if (weights.length > 0) {
+    await prisma.exerciseWeight.createMany({
+      data: weights.map((w) => ({
+        userId: user.id,
+        workoutId: parsed.workoutId,
+        exerciseName: w.exerciseName,
+        weight: w.weight,
       })),
     });
   }

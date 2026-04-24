@@ -39,6 +39,7 @@ model User {
   consents           UserConsent[]
   exportRequests     DataExportRequest[]
   substitutions      WorkoutSubstitution[]
+  exerciseWeights    ExerciseWeight[]
   equipmentProfile   Json                  @default("[]") // string[]
 }
 
@@ -87,6 +88,7 @@ model Workout {
   completions     WorkoutCompletion[]
   readinessChecks ReadinessCheck[]
   substitutions   WorkoutSubstitution[]
+  exerciseWeights ExerciseWeight[]
 
   @@unique([weekId, dayNumber])
 }
@@ -254,5 +256,19 @@ model WorkoutSubstitution {
   workout                 Workout            @relation(fields: [workoutId], references: [id], onDelete: Cascade)
   completion              WorkoutCompletion? @relation(fields: [workoutCompletionId], references: [id], onDelete: SetNull)
 
+  @@index([userId, workoutId])
+}
+
+model ExerciseWeight {
+  id           String   @id @default(cuid())
+  userId       String
+  workoutId    String
+  exerciseName String   // base display name, e.g. "Squat"
+  weight       Float
+  loggedAt     DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workout      Workout  @relation(fields: [workoutId], references: [id], onDelete: Cascade)
+
+  @@index([userId, exerciseName])
   @@index([userId, workoutId])
 }

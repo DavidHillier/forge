@@ -65,6 +65,13 @@ export const substitutionReasonSchema = z.enum([
   "conditioning",
 ]);
 
+export const weightsJsonSchema = z.array(
+  z.object({
+    exerciseName: z.string(),
+    weight: z.number().positive(),
+  }),
+);
+
 export const substitutionsJsonSchema = z.array(
   z.object({
     originalExerciseName: z.string(),

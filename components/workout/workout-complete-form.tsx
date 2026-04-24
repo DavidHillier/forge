@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { inputClass } from "@/components/ui/field";
 import { completeWorkoutAction } from "@/lib/actions/app-actions";
-import { loadSubstitutions } from "@/lib/substitutions/logic";
+import { loadSubstitutions, loadWeights } from "@/lib/substitutions/logic";
 import type { WorkoutSubstitutionEntry } from "@/lib/substitutions/types";
 
 type Props = {
@@ -16,9 +16,13 @@ type Props = {
 
 export function WorkoutCompleteForm({ workoutId, totalSeconds, circuitsCompleted, roundsCompleted }: Props) {
   const [subs, setSubs] = useState<WorkoutSubstitutionEntry[]>([]);
+  const [weightsJson, setWeightsJson] = useState("[]");
 
   useEffect(() => {
     setSubs(loadSubstitutions(workoutId));
+    const w = loadWeights(workoutId);
+    const entries = Object.entries(w).map(([exerciseName, weight]) => ({ exerciseName, weight }));
+    setWeightsJson(JSON.stringify(entries));
   }, [workoutId]);
 
   return (
@@ -28,6 +32,7 @@ export function WorkoutCompleteForm({ workoutId, totalSeconds, circuitsCompleted
       <input type="hidden" name="circuitsCompleted" value={circuitsCompleted} />
       <input type="hidden" name="roundsCompleted" value={roundsCompleted} />
       <input type="hidden" name="substitutionsJson" value={JSON.stringify(subs)} />
+      <input type="hidden" name="weightsJson" value={weightsJson} />
 
       <div className="grid grid-cols-3 gap-3 text-center">
         <div className="rounded-md bg-[#F7F3EA] p-3">
