@@ -16,6 +16,19 @@ const cormorant = Cormorant_Garamond({
 export const metadata: Metadata = {
   title: "Forge",
   description: "A structured 9-week fat-loss and conditioning programme.",
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: [
+      { url: "/icons/forge-icon-192.png", sizes: "192x192", type: "image/png" },
+      { url: "/icons/forge-icon-512.png", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
+  },
+  appleWebApp: {
+    capable: true,
+    title: "Forge",
+    statusBarStyle: "black-translucent",
+  },
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
