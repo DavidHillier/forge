@@ -46,8 +46,6 @@ export default async function WorkoutPreviewPage({ params }: { params: Promise<{
   const weightedBaseNames = [...new Set(allExerciseNames.filter(isWeightedExercise).map(stripTarget))];
   const lastWeights = await getLastWeightsForExercises(user.id, weightedBaseNames);
 
-  const userEquipment = Array.isArray(user.equipmentProfile) ? (user.equipmentProfile as string[]) : [];
-
   return (
     <AppShell active="Today">
       <div className="grid gap-6 lg:grid-cols-[0.75fr_0.25fr]">
@@ -73,7 +71,6 @@ export default async function WorkoutPreviewPage({ params }: { params: Promise<{
               })),
             }))}
             substitutesByCanonical={substitutesByCanonical}
-            userEquipment={userEquipment}
             lastWeights={lastWeights}
             units={user.units}
             generatedExercises={generatedExercises}

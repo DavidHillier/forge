@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { inputClass } from "@/components/ui/field";
 import { completeWorkoutAction } from "@/lib/actions/app-actions";
@@ -16,15 +16,12 @@ type Props = {
 };
 
 export function WorkoutCompleteForm({ workoutId, totalSeconds, circuitsCompleted, roundsCompleted, hadFailures }: Props) {
-  const [subs, setSubs] = useState<WorkoutSubstitutionEntry[]>([]);
-  const [weightsJson, setWeightsJson] = useState("[]");
-
-  useEffect(() => {
-    setSubs(loadSubstitutions(workoutId));
+  const [subs] = useState<WorkoutSubstitutionEntry[]>(() => loadSubstitutions(workoutId));
+  const [weightsJson] = useState(() => {
     const w = loadWeights(workoutId);
     const entries = Object.entries(w).map(([exerciseName, weight]) => ({ exerciseName, weight }));
-    setWeightsJson(JSON.stringify(entries));
-  }, [workoutId]);
+    return JSON.stringify(entries);
+  });
 
   return (
     <form action={completeWorkoutAction} className="grid gap-4">

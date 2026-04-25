@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { ArrowLeftRight } from "lucide-react";
-import { SubstituteSheet } from "./substitute-sheet";
+import { useState } from "react";
+import { ChevronDown } from "lucide-react";
 import {
   buildSubstitutionMap,
   extractTarget,
@@ -17,7 +16,7 @@ import {
   saveWeights,
   stripTarget,
 } from "@/lib/substitutions/logic";
-import type { SubstituteOption, SubstitutionReason, WorkoutSubstitutionEntry } from "@/lib/substitutions/types";
+import type { SubstituteOption, WorkoutSubstitutionEntry } from "@/lib/substitutions/types";
 
 type Exercise = {
   id: string;
@@ -38,7 +37,6 @@ type Props = {
   workoutId: string;
   blocks: Block[];
   substitutesByCanonical: Record<string, SubstituteOption[]>;
-  userEquipment: string[];
   lastWeights: Record<string, number>;
   units: string;
   generatedExercises?: { exerciseId: string; exerciseName: string }[];
@@ -48,23 +46,15 @@ export function WorkoutPreviewExercises({
   workoutId,
   blocks,
   substitutesByCanonical,
-  userEquipment,
   lastWeights,
   units,
   generatedExercises,
 }: Props) {
-  const [subs, setSubs] = useState<WorkoutSubstitutionEntry[]>([]);
-  const [weights, setWeights] = useState<Record<string, number>>({});
-  const [targetOverrides, setTargetOverrides] = useState<Record<string, string>>({});
-  const [sheetFor, setSheetFor] = useState<string | null>(null);
+  const [subs, setSubs] = useState<WorkoutSubstitutionEntry[]>(() => loadSubstitutions(workoutId));
+  const [weights, setWeights] = useState<Record<string, number>>(() => ({ ...lastWeights, ...loadWeights(workoutId) }));
+  const [targetOverrides, setTargetOverrides] = useState<Record<string, string>>(() => loadTargetOverrides(workoutId));
+  const [openDropdownFor, setOpenDropdownFor] = useState<string | null>(null);
   const unitLabel = units === "imperial" ? "lb" : "kg";
-
-  useEffect(() => {
-    setSubs(loadSubstitutions(workoutId));
-    const stored = loadWeights(workoutId);
-    setWeights({ ...lastWeights, ...stored });
-    setTargetOverrides(loadTargetOverrides(workoutId));
-  }, [workoutId, lastWeights]);
 
   function handleWeightChange(baseName: string, value: string) {
     const num = parseFloat(value);
@@ -97,22 +87,28 @@ export function WorkoutPreviewExercises({
     generatedMap.set(entry.exerciseId, entry.exerciseName);
   }
 
-  function handleSelect(originalDisplayName: string, sub: SubstituteOption, reason: SubstitutionReason) {
+  function handleSelect(originalDisplayName: string, sub: SubstituteOption) {
     const baseName = stripTarget(originalDisplayName);
     const next: WorkoutSubstitutionEntry = {
       originalExerciseName: baseName,
       substitutedExerciseName: sub.substitute.name,
-      substitutionReason: reason,
+      substitutionReason: sub.substitutionReasons.includes("closest_match")
+        ? "closest_match"
+        : (sub.substitutionReasons[0] ?? "closest_match"),
     };
     const updated = subs.filter((s) => s.originalExerciseName !== baseName).concat(next);
     setSubs(updated);
     saveSubstitutions(workoutId, updated);
-    setSheetFor(null);
+    setOpenDropdownFor(null);
   }
 
-  const activeSheet = sheetFor ? blocks.flatMap((b) => b.exercises).find((e) => e.name === sheetFor) : null;
-  const activeCanonical = activeSheet ? getCanonicalName(activeSheet.name) : null;
-  const activeSubstitutes = activeCanonical ? (substitutesByCanonical[activeCanonical] ?? []) : [];
+  function handleReset(originalDisplayName: string) {
+    const baseName = stripTarget(originalDisplayName);
+    const updated = subs.filter((s) => s.originalExerciseName !== baseName);
+    setSubs(updated);
+    saveSubstitutions(workoutId, updated);
+    setOpenDropdownFor(null);
+  }
 
   return (
     <>
@@ -136,6 +132,9 @@ export function WorkoutPreviewExercises({
                 const weighted = isWeightedExercise(exercise.name);
                 const currentWeight = weights[baseName];
                 const isFromHistory = currentWeight !== undefined && lastWeights[baseName] === currentWeight;
+                const canonicalName = getCanonicalName(exercise.name);
+                const substituteOptions = canonicalName ? (substitutesByCanonical[canonicalName] ?? []) : [];
+                const dropdownOpen = openDropdownFor === exercise.id;
 
                 // Resolved display name: substitution > generated > original
                 const displayName = swapped?.substitutedExerciseName ?? generatedName ?? (isMain ? baseName : exercise.name);
@@ -146,10 +145,55 @@ export function WorkoutPreviewExercises({
                     <div className="flex items-start justify-between gap-2">
                       {/* Left: name + editable target for main exercises */}
                       <div className="min-w-0">
-                        <div>
-                          <span className="font-medium">{displayName}</span>
+                        <div className="relative">
+                          {swappable ? (
+                            <button
+                              type="button"
+                              onClick={() => setOpenDropdownFor(dropdownOpen ? null : exercise.id)}
+                              className="inline-flex items-center gap-1 rounded-sm text-left font-medium underline-offset-4 hover:underline focus:outline-none focus:ring-2 focus:ring-[#C9A84C]"
+                              aria-expanded={dropdownOpen}
+                            >
+                              {displayName}
+                              <ChevronDown size={14} className={dropdownOpen ? "rotate-180 transition-transform" : "transition-transform"} />
+                            </button>
+                          ) : (
+                            <span className="font-medium">{displayName}</span>
+                          )}
                           {originalLabel && (
                             <span className="ml-2 text-xs text-[#6B756F]">was: {originalLabel}</span>
+                          )}
+                          {dropdownOpen && (
+                            <div className="absolute left-0 top-7 z-20 w-72 overflow-hidden rounded-lg border border-[#D9D0BE] bg-white shadow-xl">
+                              <div className="border-b border-[#E4DCCB] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[#6B756F]">
+                                Choose substitute
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleReset(exercise.name)}
+                                className="block w-full px-3 py-2 text-left text-sm hover:bg-[#F7F3EA]"
+                              >
+                                Original: {baseName}
+                              </button>
+                              {substituteOptions.length === 0 ? (
+                                <p className="px-3 py-3 text-sm text-[#6B756F]">No substitutes available.</p>
+                              ) : (
+                                <div className="max-h-72 overflow-y-auto">
+                                  {substituteOptions.map((sub) => (
+                                    <button
+                                      key={sub.id}
+                                      type="button"
+                                      onClick={() => handleSelect(exercise.name, sub)}
+                                      className="block w-full border-t border-[#F7F3EA] px-3 py-2 text-left hover:bg-[#F7F3EA]"
+                                    >
+                                      <span className="block text-sm font-semibold">{sub.substitute.name}</span>
+                                      <span className="mt-0.5 block text-xs text-[#6B756F]">
+                                        {sub.substitute.equipment.join(", ")} · {sub.matchQuality} match
+                                      </span>
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
                           )}
                         </div>
                         {isMain && defaultTarget && (
@@ -199,15 +243,6 @@ export function WorkoutPreviewExercises({
                             )}
                           </div>
                         )}
-                        {swappable && (
-                          <button
-                            onClick={() => setSheetFor(exercise.name)}
-                            className="flex items-center gap-1 rounded-md bg-[#1B3D2F] px-2 py-1 text-xs text-white hover:bg-[#0F4A32] transition-colors"
-                          >
-                            <ArrowLeftRight size={12} />
-                            {swapped ? "Re-swap" : "Swap"}
-                          </button>
-                        )}
                       </div>
                     </div>
                   </div>
@@ -217,16 +252,6 @@ export function WorkoutPreviewExercises({
           </div>
         );
       })}
-
-      {sheetFor && (
-        <SubstituteSheet
-          exerciseDisplayName={sheetFor}
-          substitutes={activeSubstitutes}
-          userEquipment={userEquipment}
-          onSelect={(sub, reason) => handleSelect(sheetFor, sub, reason)}
-          onClose={() => setSheetFor(null)}
-        />
-      )}
     </>
   );
 }

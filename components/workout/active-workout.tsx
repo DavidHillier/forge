@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { X } from "lucide-react";
 import { ButtonLink } from "@/components/ui/button";
@@ -26,7 +26,6 @@ interface SequenceItem {
 interface ActiveState {
   idx: number;
   hasAnyFailure: boolean;
-  startedAt: number;
 }
 
 export function ActiveWorkout({
@@ -81,18 +80,18 @@ export function ActiveWorkout({
   const [state, setState] = useState<ActiveState>({
     idx: 0,
     hasAnyFailure: false,
-    startedAt: Date.now(),
   });
 
   const [showCue, setShowCue] = useState(false);
 
-  // Workout done
-  if (state.idx >= sequence.length) {
-    const totalSeconds = Math.round((Date.now() - state.startedAt) / 1000);
+  useEffect(() => {
+    if (state.idx < sequence.length) return;
+    const totalSeconds = workout.durationMinutes * 60;
     const href = `/app/workout/${workout.id}/complete?total=${totalSeconds}&circuits=${circuitsRequired}&failed=${state.hasAnyFailure ? 1 : 0}`;
     router.push(href);
-    return null;
-  }
+  }, [circuitsRequired, router, sequence.length, state.hasAnyFailure, state.idx, workout.durationMinutes, workout.id]);
+
+  if (state.idx >= sequence.length) return null;
 
   const current = sequence[state.idx]!;
   const { block: currentBlock, exercise: currentExercise, circuitNum } = current;
@@ -128,7 +127,6 @@ export function ActiveWorkout({
     setState((prev) => ({
       idx: prev.idx + 1,
       hasAnyFailure: prev.hasAnyFailure || failed,
-      startedAt: prev.startedAt,
     }));
     setShowCue(false);
   }

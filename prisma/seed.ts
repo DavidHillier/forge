@@ -5,6 +5,8 @@ import { canonicalExercises } from "../lib/substitutions/seed-data";
 const prisma = new PrismaClient();
 
 async function main() {
+  await prisma.generatedWorkout.deleteMany();
+
   await prisma.programme.upsert({
     where: { id: "forge-9-week" },
     update: {},
