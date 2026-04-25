@@ -137,7 +137,7 @@ export function isWeightedExercise(exerciseName: string): boolean {
 }
 
 // sessionStorage helpers
-const STORAGE_PREFIX = "forge_subs_";
+const STORAGE_PREFIX = "forge_subs_v2_";
 
 export function getStorageKey(workoutId: string): string {
   return `${STORAGE_PREFIX}${workoutId}`;
@@ -193,7 +193,7 @@ export function clearWeights(workoutId: string): void {
 }
 
 // Rep / target override sessionStorage helpers
-const TARGETS_PREFIX = "forge_targets_";
+const TARGETS_PREFIX = "forge_targets_v2_";
 
 export function loadTargetOverrides(workoutId: string): Record<string, string> {
   if (typeof window === "undefined") return {};
