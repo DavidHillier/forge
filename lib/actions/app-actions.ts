@@ -8,7 +8,7 @@ import { determineReadinessRecommendation } from "@/lib/readiness/readiness";
 import { filterSubstitutesByEquipment, getCanonicalName, stripTarget } from "@/lib/substitutions/logic";
 import { getSubstitutesForExercise } from "@/lib/substitutions/queries";
 import { determineTrainingLoad } from "@/lib/workout-engine/workout";
-import { CIRCUITS_PER_LEVEL, TOTAL_LEVELS } from "@/lib/level/logic";
+import { circuitsRequiredForLevel, levelFromCleanCount, TOTAL_LEVELS } from "@/lib/level/logic";
 import {
   bodyMetricSchema,
   equipmentProfileSchema,
@@ -98,10 +98,11 @@ export async function completeWorkoutAction(formData: FormData) {
     });
   }
 
-  // Advance level progress only on clean completion
+  // Advance progress only on clean completion
   if (!hadFailures) {
     const newCompleted = user.completedCircuitsThisLevel + 1;
-    if (newCompleted >= CIRCUITS_PER_LEVEL) {
+    const required = circuitsRequiredForLevel(user.currentLevel);
+    if (newCompleted >= required) {
       await prisma.user.update({
         where: { id: user.id },
         data: {
@@ -293,11 +294,10 @@ export async function deleteWorkoutCompletionAction(formData: FormData) {
     const cleanCount = await prisma.workoutCompletion.count({
       where: { userId: user.id, hadFailures: false },
     });
-    const newLevel = Math.min(Math.floor(cleanCount / CIRCUITS_PER_LEVEL) + 1, TOTAL_LEVELS);
-    const newCompleted = cleanCount % CIRCUITS_PER_LEVEL;
+    const { level, completedCircuitsThisLevel } = levelFromCleanCount(cleanCount);
     await prisma.user.update({
       where: { id: user.id },
-      data: { currentLevel: newLevel, completedCircuitsThisLevel: newCompleted },
+      data: { currentLevel: level, completedCircuitsThisLevel },
     });
   }
 

@@ -27,6 +27,7 @@ export default async function ActiveWorkoutPage({ params }: { params: Promise<{ 
     <ActiveWorkout
       workout={workout}
       weekNumber={workout.week.weekNumber}
+      completedCircuitsThisLevel={user.completedCircuitsThisLevel}
       generatedExercises={generatedExercises}
     />
   );

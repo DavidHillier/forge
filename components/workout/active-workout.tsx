@@ -16,6 +16,7 @@ import {
 } from "@/lib/substitutions/logic";
 import type { WorkoutForEngine } from "@/lib/workout-engine/workout";
 import { calculateCircuitsForWorkout } from "@/lib/workout-engine/workout";
+import { CIRCUITS_PER_PASS } from "@/lib/level/logic";
 
 type Block = WorkoutForEngine["blocks"][number];
 type Exercise = Block["exercises"][number];
@@ -35,10 +36,12 @@ interface ActiveState {
 export function ActiveWorkout({
   workout,
   weekNumber,
+  completedCircuitsThisLevel,
   generatedExercises,
 }: {
   workout: WorkoutForEngine & { id: string };
   weekNumber: number;
+  completedCircuitsThisLevel: number;
   generatedExercises?: { exerciseId: string; exerciseName: string }[];
 }) {
   const router = useRouter();
@@ -141,8 +144,11 @@ export function ActiveWorkout({
     ? currentExercise.formCues.map(String)
     : [];
 
+  const passNum = Math.floor(completedCircuitsThisLevel / CIRCUITS_PER_PASS) + 1;
+  const passesNeeded = weekNumber; // level N = N passes
+  const passLabel = passesNeeded > 1 ? `Week ${passNum} of ${passesNeeded} · ` : "";
   const circuitLabel = isMainBlock
-    ? `Circuit ${circuitNum} of ${circuitsRequired}`
+    ? `${passLabel}Circuit ${circuitNum} of ${circuitsRequired}`
     : (currentBlock.name ?? "");
 
   const totalInBlock = sequence.filter(
