@@ -7,8 +7,11 @@ import { ButtonLink } from "@/components/ui/button";
 import {
   buildSubstitutionMap,
   extractTarget,
+  isWeightedExercise,
   loadSubstitutions,
   loadTargetOverrides,
+  loadWeights,
+  saveWeights,
   stripTarget,
 } from "@/lib/substitutions/logic";
 import type { WorkoutForEngine } from "@/lib/workout-engine/workout";
@@ -20,12 +23,13 @@ type Exercise = Block["exercises"][number];
 interface SequenceItem {
   block: Block;
   exercise: Exercise;
-  circuitNum: number; // 1-based, only meaningful for main blocks
+  circuitNum: number;
 }
 
 interface ActiveState {
   idx: number;
   hasAnyFailure: boolean;
+  startedAt: number;
 }
 
 export function ActiveWorkout({
@@ -52,7 +56,6 @@ export function ActiveWorkout({
 
   const targetOverrides = useMemo(() => loadTargetOverrides(workout.id), [workout.id]);
 
-  // Map exerciseId -> generated exercise name (base name, no target suffix)
   const generatedMap = useMemo(() => {
     const map = new Map<string, string>();
     for (const entry of generatedExercises ?? []) {
@@ -61,7 +64,6 @@ export function ActiveWorkout({
     return map;
   }, [generatedExercises]);
 
-  // Pre-expand the full workout sequence
   const sequence = useMemo<SequenceItem[]>(() => {
     const items: SequenceItem[] = [];
     for (const block of blocks) {
@@ -80,16 +82,36 @@ export function ActiveWorkout({
   const [state, setState] = useState<ActiveState>({
     idx: 0,
     hasAnyFailure: false,
+    startedAt: Date.now(),
   });
 
   const [showCue, setShowCue] = useState(false);
 
+  // Weights — loaded from sessionStorage, updated inline during workout
+  const [weights, setWeights] = useState<Record<string, number>>({});
+  useEffect(() => {
+    setWeights(loadWeights(workout.id));
+  }, [workout.id]);
+
+  function handleWeightChange(baseName: string, value: string) {
+    const num = parseFloat(value);
+    const next = { ...weights };
+    if (!value || isNaN(num)) {
+      delete next[baseName];
+    } else {
+      next[baseName] = num;
+    }
+    setWeights(next);
+    saveWeights(workout.id, next);
+  }
+
+  // Redirect when sequence is exhausted
   useEffect(() => {
     if (state.idx < sequence.length) return;
-    const totalSeconds = workout.durationMinutes * 60;
+    const totalSeconds = Math.round((Date.now() - state.startedAt) / 1000);
     const href = `/app/workout/${workout.id}/complete?total=${totalSeconds}&circuits=${circuitsRequired}&failed=${state.hasAnyFailure ? 1 : 0}`;
     router.push(href);
-  }, [circuitsRequired, router, sequence.length, state.hasAnyFailure, state.idx, workout.durationMinutes, workout.id]);
+  }, [circuitsRequired, router, sequence.length, state]);
 
   if (state.idx >= sequence.length) return null;
 
@@ -106,6 +128,14 @@ export function ActiveWorkout({
 
   const defaultTarget = extractTarget(currentExercise.name);
   const activeTarget = targetOverrides[originalBaseName] ?? defaultTarget;
+
+  // Check if the resolved (possibly generated/swapped) exercise is weighted
+  const resolvedIsWeighted = isWeightedExercise(currentExercise.name)
+    || (resolvedBaseName !== originalBaseName && resolvedBaseName.toLowerCase().startsWith("dumbbell"))
+    || (resolvedBaseName !== originalBaseName && resolvedBaseName.toLowerCase().startsWith("kettlebell"))
+    || (resolvedBaseName !== originalBaseName && resolvedBaseName.toLowerCase().startsWith("barbell"));
+
+  const currentWeight = weights[originalBaseName];
 
   const formCues = Array.isArray(currentExercise.formCues)
     ? currentExercise.formCues.map(String)
@@ -127,6 +157,7 @@ export function ActiveWorkout({
     setState((prev) => ({
       idx: prev.idx + 1,
       hasAnyFailure: prev.hasAnyFailure || failed,
+      startedAt: prev.startedAt,
     }));
     setShowCue(false);
   }
@@ -151,26 +182,49 @@ export function ActiveWorkout({
 
         <section className="text-center">
           <p className="mb-2 text-sm text-[#F7F3EA]/60 uppercase tracking-wider">
-            Week {weekNumber} · {circuitLabel}
+            Level {weekNumber} · {circuitLabel}
           </p>
           <p className="mb-6 text-xs text-[#F7F3EA]/50">
             {posInBlock} / {totalInBlock}
           </p>
-          <h1 className="font-[var(--font-display)] text-4xl font-bold leading-tight">
+
+          {/* Exercise name — scales down for long names */}
+          <h1 className="font-[var(--font-display)] font-bold leading-tight hyphens-auto break-words"
+              style={{ fontSize: resolvedBaseName.length > 20 ? "clamp(1.6rem, 6vw, 2.5rem)" : "clamp(2rem, 8vw, 3rem)" }}>
             {resolvedBaseName}
           </h1>
+
           {activeTarget && (
             <p className="mt-2 text-lg text-[#C9A84C] font-semibold tabular-nums">{activeTarget}</p>
           )}
           {wasSubstituted && (
             <p className="mt-1 text-xs text-[#F7F3EA]/40">Originally: {originalBaseName}</p>
           )}
-          {state.hasAnyFailure && (
-            <p className="mt-3 text-xs text-[#F7A9A7]/70">Workout has failures — continue and redo tomorrow</p>
+
+          {/* Inline weight input for weighted exercises */}
+          {resolvedIsWeighted && (
+            <div className="mt-5 flex items-center justify-center gap-2">
+              <input
+                type="number"
+                inputMode="decimal"
+                step="0.5"
+                min="0"
+                value={currentWeight ?? ""}
+                onChange={(e) => handleWeightChange(originalBaseName, e.target.value)}
+                placeholder="—"
+                className="w-20 rounded-lg border border-[#C9A84C]/40 bg-white/10 px-3 py-2 text-center text-lg font-semibold tabular-nums text-white placeholder-white/30 focus:border-[#C9A84C] focus:outline-none"
+              />
+              <span className="text-sm text-[#F7F3EA]/60">kg / lb</span>
+            </div>
           )}
+
+          {state.hasAnyFailure && (
+            <p className="mt-4 text-xs text-[#F7A9A7]/70">Workout has failures — continue and redo tomorrow</p>
+          )}
+
           <button
             onClick={() => setShowCue(true)}
-            className="mt-6 text-sm text-[#C9A24D] underline underline-offset-4"
+            className="mt-5 text-sm text-[#C9A24D] underline underline-offset-4"
           >
             Form cues
           </button>

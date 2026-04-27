@@ -1,11 +1,11 @@
 import Link from "next/link";
-import { CalendarCheck, ChartNoAxesColumnIncreasing, Dumbbell, Settings } from "lucide-react";
+import { CalendarCheck, ChartNoAxesColumnIncreasing, ClipboardList, Dumbbell, Settings } from "lucide-react";
 import { Crest } from "@/components/brand/crest";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { href: "/app/today", label: "Today", icon: CalendarCheck },
-  { href: "/app/programme", label: "Programme", icon: Dumbbell },
+  { href: "/app/history", label: "History", icon: ClipboardList },
   { href: "/app/progress", label: "Progress", icon: ChartNoAxesColumnIncreasing },
   { href: "/app/settings", label: "Settings", icon: Settings },
 ];

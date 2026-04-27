@@ -270,6 +270,41 @@ export async function updateEquipmentProfileAction(formData: FormData) {
   revalidatePath("/app/settings");
 }
 
+export async function deleteWorkoutCompletionAction(formData: FormData) {
+  const user = await requireUser();
+  const completionId = formData.get("completionId") as string;
+  if (!completionId) return;
+
+  const completion = await prisma.workoutCompletion.findUnique({
+    where: { id: completionId, userId: user.id },
+  });
+  if (!completion) return;
+
+  await prisma.$transaction([
+    prisma.workoutCompletion.delete({ where: { id: completionId } }),
+    // Remove generated workout so it can be regenerated
+    prisma.generatedWorkout.deleteMany({
+      where: { userId: user.id, workoutId: completion.workoutId },
+    }),
+  ]);
+
+  // Recalculate level progress from remaining clean completions
+  if (!completion.hadFailures) {
+    const cleanCount = await prisma.workoutCompletion.count({
+      where: { userId: user.id, hadFailures: false },
+    });
+    const newLevel = Math.min(Math.floor(cleanCount / CIRCUITS_PER_LEVEL) + 1, TOTAL_LEVELS);
+    const newCompleted = cleanCount % CIRCUITS_PER_LEVEL;
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { currentLevel: newLevel, completedCircuitsThisLevel: newCompleted },
+    });
+  }
+
+  revalidatePath("/app/history");
+  revalidatePath("/app/today");
+}
+
 export async function resetProgrammeDataAction() {
   const user = await requireUser();
   await prisma.$transaction([
