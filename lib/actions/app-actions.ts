@@ -8,7 +8,7 @@ import { determineReadinessRecommendation } from "@/lib/readiness/readiness";
 import { filterSubstitutesByEquipment, getCanonicalName, stripTarget } from "@/lib/substitutions/logic";
 import { getSubstitutesForExercise } from "@/lib/substitutions/queries";
 import { determineTrainingLoad } from "@/lib/workout-engine/workout";
-import { circuitsRequiredForLevel, levelFromCleanCount, TOTAL_LEVELS } from "@/lib/level/logic";
+import { circuitsRequiredForLevel, getWalkTargetKm, levelFromCleanCount, TOTAL_LEVELS } from "@/lib/level/logic";
 import {
   bodyMetricSchema,
   equipmentProfileSchema,
@@ -269,6 +269,28 @@ export async function updateEquipmentProfileAction(formData: FormData) {
   });
 
   revalidatePath("/app/settings");
+}
+
+export async function logWalkAction(formData: FormData) {
+  const user = await requireUser();
+  const level = user.currentLevel;
+  const raw = formData.get("distanceKm");
+  const distanceKm = raw ? Math.max(0.1, parseFloat(raw as string)) : 1;
+  if (isNaN(distanceKm)) return;
+  await prisma.walkLog.create({
+    data: { userId: user.id, level, distanceKm },
+  });
+  revalidatePath("/app/today");
+  revalidatePath("/app/history");
+}
+
+export async function deleteWalkLogAction(formData: FormData) {
+  const user = await requireUser();
+  const walkLogId = formData.get("walkLogId") as string;
+  if (!walkLogId) return;
+  await prisma.walkLog.deleteMany({ where: { id: walkLogId, userId: user.id } });
+  revalidatePath("/app/today");
+  revalidatePath("/app/history");
 }
 
 export async function deleteWorkoutCompletionAction(formData: FormData) {

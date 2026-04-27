@@ -43,6 +43,7 @@ model User {
   substitutions              WorkoutSubstitution[]
   exerciseWeights            ExerciseWeight[]
   generatedWorkouts          GeneratedWorkout[]
+  walkLogs                   WalkLog[]
   equipmentProfile           Json                  @default("[]") // string[]
 }
 
@@ -276,6 +277,17 @@ model ExerciseWeight {
 
   @@index([userId, exerciseName])
   @@index([userId, workoutId])
+}
+
+model WalkLog {
+  id         String   @id @default(cuid())
+  userId     String
+  level      Int
+  distanceKm Float    // distance walked in this session
+  loggedAt   DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model GeneratedWorkout {
