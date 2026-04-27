@@ -1,7 +1,6 @@
-import { Trash2 } from "lucide-react";
 import { AppShell } from "@/components/layout/app-shell";
 import { Card, SectionTitle } from "@/components/ui/card";
-import { deleteWorkoutCompletionAction } from "@/lib/actions/app-actions";
+import { DeleteCompletionButton } from "@/components/history/delete-completion-button";
 import { requireUser } from "@/lib/auth/session";
 import { prisma } from "@/lib/db/prisma";
 
@@ -61,22 +60,7 @@ export default async function HistoryPage() {
                   <p className="mt-1.5 text-xs text-[#6B756F] italic">&ldquo;{c.notes}&rdquo;</p>
                 )}
               </div>
-
-              <form action={deleteWorkoutCompletionAction} className="shrink-0">
-                <input type="hidden" name="completionId" value={c.id} />
-                <button
-                  type="submit"
-                  title="Delete this session"
-                  className="flex size-9 items-center justify-center rounded-full text-[#6B756F] transition hover:bg-[#B94A48]/10 hover:text-[#B94A48]"
-                  onClick={(e) => {
-                    if (!confirm("Delete this session? This cannot be undone and will reset your generated exercises for this workout.")) {
-                      e.preventDefault();
-                    }
-                  }}
-                >
-                  <Trash2 size={16} />
-                </button>
-              </form>
+              <DeleteCompletionButton completionId={c.id} />
             </Card>
           );
         })}
