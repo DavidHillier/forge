@@ -68,9 +68,9 @@ export const substitutionReasonSchema = z.enum([
 export const weightsJsonSchema = z.array(
   z.object({
     exerciseName: z.string(),
-    weight: z.number().positive(),
+    weight: z.number().min(0),
   }),
-);
+).transform((entries) => entries.filter((e) => e.weight > 0));
 
 export const substitutionsJsonSchema = z.array(
   z.object({
