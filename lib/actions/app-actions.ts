@@ -47,74 +47,109 @@ export async function saveReadinessAction(formData: FormData) {
 
 export async function completeWorkoutAction(formData: FormData) {
   const user = await requireUser();
-  const parsed = workoutCompletionSchema.parse(Object.fromEntries(formData));
+
+  let parsed: ReturnType<typeof workoutCompletionSchema.parse>;
+  try {
+    parsed = workoutCompletionSchema.parse(Object.fromEntries(formData));
+  } catch (e) {
+    console.error("[completeWorkoutAction] schema validation error:", e, "\nformData:", Object.fromEntries(formData));
+    throw e;
+  }
+
   const hadFailures = formData.get("hadFailures") === "1";
 
   const rawSubs = formData.get("substitutionsJson");
-  const substitutions = rawSubs
-    ? substitutionsJsonSchema.parse(JSON.parse(rawSubs as string))
-    : [];
+  let substitutions: ReturnType<typeof substitutionsJsonSchema.parse> = [];
+  try {
+    if (rawSubs) substitutions = substitutionsJsonSchema.parse(JSON.parse(rawSubs as string));
+  } catch (e) {
+    console.error("[completeWorkoutAction] substitutions parse error — skipping substitutions:", rawSubs, e);
+  }
 
   const rawWeights = formData.get("weightsJson");
-  const weights = rawWeights
-    ? weightsJsonSchema.parse(JSON.parse(rawWeights as string))
-    : [];
+  let weights: ReturnType<typeof weightsJsonSchema.parse> = [];
+  try {
+    if (rawWeights) weights = weightsJsonSchema.parse(JSON.parse(rawWeights as string));
+  } catch (e) {
+    console.error("[completeWorkoutAction] weights parse error — skipping weights:", rawWeights, e);
+  }
 
-  const completion = await prisma.workoutCompletion.create({
-    data: {
-      userId: user.id,
-      workoutId: parsed.workoutId,
-      totalSeconds: parsed.totalSeconds,
-      circuitsCompleted: parsed.circuitsCompleted,
-      roundsCompleted: parsed.roundsCompleted,
-      effortScore: parsed.effortScore,
-      trainingLoad: determineTrainingLoad(parsed.effortScore),
-      hadFailures,
-      notes: parsed.notes,
-    },
-  });
-
-  if (substitutions.length > 0) {
-    await prisma.workoutSubstitution.createMany({
-      data: substitutions.map((s) => ({
+  let completion!: { id: string };
+  try {
+    completion = await prisma.workoutCompletion.create({
+      data: {
         userId: user.id,
         workoutId: parsed.workoutId,
-        workoutCompletionId: completion.id,
-        originalExerciseName: s.originalExerciseName,
-        substitutedExerciseName: s.substitutedExerciseName,
-        substitutionReason: s.substitutionReason,
-      })),
+        totalSeconds: parsed.totalSeconds,
+        circuitsCompleted: parsed.circuitsCompleted,
+        roundsCompleted: parsed.roundsCompleted,
+        effortScore: parsed.effortScore,
+        trainingLoad: determineTrainingLoad(parsed.effortScore),
+        hadFailures,
+        notes: parsed.notes || null,
+      },
     });
+  } catch (e) {
+    console.error("[completeWorkoutAction] workoutCompletion.create error:", e);
+    throw e;
+  }
+
+  if (substitutions.length > 0) {
+    try {
+      await prisma.workoutSubstitution.createMany({
+        data: substitutions.map((s) => ({
+          userId: user.id,
+          workoutId: parsed.workoutId,
+          workoutCompletionId: completion.id,
+          originalExerciseName: s.originalExerciseName,
+          substitutedExerciseName: s.substitutedExerciseName,
+          substitutionReason: s.substitutionReason,
+        })),
+      });
+    } catch (e) {
+      console.error("[completeWorkoutAction] workoutSubstitution.createMany error:", e);
+      throw e;
+    }
   }
 
   if (weights.length > 0) {
-    await prisma.exerciseWeight.createMany({
-      data: weights.map((w) => ({
-        userId: user.id,
-        workoutId: parsed.workoutId,
-        exerciseName: w.exerciseName,
-        weight: w.weight,
-      })),
-    });
+    try {
+      await prisma.exerciseWeight.createMany({
+        data: weights.map((w) => ({
+          userId: user.id,
+          workoutId: parsed.workoutId,
+          exerciseName: w.exerciseName,
+          weight: w.weight,
+        })),
+      });
+    } catch (e) {
+      console.error("[completeWorkoutAction] exerciseWeight.createMany error:", e);
+      throw e;
+    }
   }
 
   // Advance progress only on clean completion
   if (!hadFailures) {
-    const newCompleted = user.completedCircuitsThisLevel + 1;
-    const required = circuitsRequiredForLevel(user.currentLevel);
-    if (newCompleted >= required) {
-      await prisma.user.update({
-        where: { id: user.id },
-        data: {
-          currentLevel: Math.min(user.currentLevel + 1, TOTAL_LEVELS),
-          completedCircuitsThisLevel: 0,
-        },
-      });
-    } else {
-      await prisma.user.update({
-        where: { id: user.id },
-        data: { completedCircuitsThisLevel: newCompleted },
-      });
+    try {
+      const newCompleted = user.completedCircuitsThisLevel + 1;
+      const required = circuitsRequiredForLevel(user.currentLevel);
+      if (newCompleted >= required) {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: {
+            currentLevel: Math.min(user.currentLevel + 1, TOTAL_LEVELS),
+            completedCircuitsThisLevel: 0,
+          },
+        });
+      } else {
+        await prisma.user.update({
+          where: { id: user.id },
+          data: { completedCircuitsThisLevel: newCompleted },
+        });
+      }
+    } catch (e) {
+      console.error("[completeWorkoutAction] user progress update error:", e);
+      throw e;
     }
   }
 

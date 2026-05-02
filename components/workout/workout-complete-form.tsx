@@ -19,7 +19,9 @@ export function WorkoutCompleteForm({ workoutId, totalSeconds, circuitsCompleted
   const [subs] = useState<WorkoutSubstitutionEntry[]>(() => loadSubstitutions(workoutId));
   const [weightsJson] = useState(() => {
     const w = loadWeights(workoutId);
-    const entries = Object.entries(w).map(([exerciseName, weight]) => ({ exerciseName, weight }));
+    const entries = Object.entries(w)
+      .filter(([, weight]) => weight > 0)
+      .map(([exerciseName, weight]) => ({ exerciseName, weight }));
     return JSON.stringify(entries);
   });
 
