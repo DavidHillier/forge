@@ -7,13 +7,18 @@ import { ButtonLink } from "@/components/ui/button";
 import {
   buildSubstitutionMap,
   extractTarget,
+  getCanonicalName,
   isWeightedExercise,
   loadSubstitutions,
   loadTargetOverrides,
   loadWeights,
+  saveSubstitutions,
+  saveTargetOverrides,
   saveWeights,
   stripTarget,
 } from "@/lib/substitutions/logic";
+import { getSubstitutesForExercise } from "@/lib/substitutions/queries";
+import type { SubstituteOption, WorkoutSubstitutionEntry } from "@/lib/substitutions/types";
 import type { WorkoutForEngine } from "@/lib/workout-engine/workout";
 import { calculateCircuitsForWorkout } from "@/lib/workout-engine/workout";
 import { CIRCUITS_PER_PASS } from "@/lib/level/logic";
@@ -52,12 +57,16 @@ export function ActiveWorkout({
     [workout],
   );
 
-  const subsMap = useMemo(
-    () => buildSubstitutionMap(loadSubstitutions(workout.id)),
-    [workout.id],
-  );
+  // Reactive substitutions — updated when user swaps mid-workout
+  const [substitutions, setSubstitutions] = useState<WorkoutSubstitutionEntry[]>([]);
+  const [targetOverrides, setTargetOverrides] = useState<Record<string, string>>({});
 
-  const targetOverrides = useMemo(() => loadTargetOverrides(workout.id), [workout.id]);
+  useEffect(() => {
+    setSubstitutions(loadSubstitutions(workout.id));
+    setTargetOverrides(loadTargetOverrides(workout.id));
+  }, [workout.id]);
+
+  const subsMap = useMemo(() => buildSubstitutionMap(substitutions), [substitutions]);
 
   const generatedMap = useMemo(() => {
     const map = new Map<string, string>();
@@ -89,6 +98,11 @@ export function ActiveWorkout({
   });
 
   const [showCue, setShowCue] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
+  const [editSubs, setEditSubs] = useState<SubstituteOption[] | null>(null);
+  const [loadingSubs, setLoadingSubs] = useState(false);
+  // Local draft of the target while the edit modal is open
+  const [draftTarget, setDraftTarget] = useState("");
 
   // Weights — loaded from sessionStorage, updated inline during workout
   const [weights, setWeights] = useState<Record<string, number>>({});
@@ -99,7 +113,7 @@ export function ActiveWorkout({
   function handleWeightChange(baseName: string, value: string) {
     const num = parseFloat(value);
     const next = { ...weights };
-    if (!value || isNaN(num)) {
+    if (!value || isNaN(num) || num <= 0) {
       delete next[baseName];
     } else {
       next[baseName] = num;
@@ -166,6 +180,61 @@ export function ActiveWorkout({
       startedAt: prev.startedAt,
     }));
     setShowCue(false);
+    setEditSubs(null); // reset so next exercise fetches its own substitutes
+  }
+
+  async function openEdit() {
+    setDraftTarget(activeTarget);
+    setShowEdit(true);
+
+    const canonicalName = getCanonicalName(originalBaseName);
+    if (!canonicalName || editSubs !== null) return;
+
+    setLoadingSubs(true);
+    try {
+      const subs = await getSubstitutesForExercise(canonicalName);
+      setEditSubs(subs);
+    } catch {
+      setEditSubs([]);
+    } finally {
+      setLoadingSubs(false);
+    }
+  }
+
+  function closeEdit() {
+    setShowEdit(false);
+  }
+
+  function applyTargetChange() {
+    const trimmed = draftTarget.trim();
+    const next = { ...targetOverrides };
+    if (!trimmed || trimmed === defaultTarget) {
+      delete next[originalBaseName];
+    } else {
+      next[originalBaseName] = trimmed;
+    }
+    setTargetOverrides(next);
+    saveTargetOverrides(workout.id, next);
+  }
+
+  function handleSwap(sub: SubstituteOption) {
+    const newEntry: WorkoutSubstitutionEntry = {
+      originalExerciseName: originalBaseName,
+      substitutedExerciseName: sub.substitute.name,
+      substitutionReason: "closest_match",
+    };
+    const next = substitutions.filter((s) => s.originalExerciseName !== originalBaseName);
+    next.push(newEntry);
+    setSubstitutions(next);
+    saveSubstitutions(workout.id, next);
+    closeEdit();
+  }
+
+  function handleRevert() {
+    const next = substitutions.filter((s) => s.originalExerciseName !== originalBaseName);
+    setSubstitutions(next);
+    saveSubstitutions(workout.id, next);
+    closeEdit();
   }
 
   return (
@@ -228,12 +297,20 @@ export function ActiveWorkout({
             <p className="mt-4 text-xs text-[#F7A9A7]/70">Workout has failures — continue and redo tomorrow</p>
           )}
 
-          <button
-            onClick={() => setShowCue(true)}
-            className="mt-5 text-sm text-[#C9A24D] underline underline-offset-4"
-          >
-            Form cues
-          </button>
+          <div className="mt-5 flex items-center justify-center gap-5">
+            <button
+              onClick={() => setShowCue(true)}
+              className="text-sm text-[#C9A24D] underline underline-offset-4"
+            >
+              Form cues
+            </button>
+            <button
+              onClick={openEdit}
+              className="text-sm text-[#C9A24D] underline underline-offset-4"
+            >
+              Edit
+            </button>
+          </div>
         </section>
 
         <div className={`grid gap-3 ${isMainBlock ? "grid-cols-2" : "grid-cols-1"}`}>
@@ -274,6 +351,99 @@ export function ActiveWorkout({
             <p className="mt-4 text-sm font-semibold text-[#B94A48]">
               {currentExercise.safetyCue}
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* Edit modal */}
+      {showEdit && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/45 p-4">
+          <div className="w-full max-w-sm rounded-lg bg-[#FBF8F1] text-[#10251D] overflow-hidden">
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-5 pt-5 pb-4">
+              <h2 className="font-[var(--font-display)] text-xl font-semibold">Edit exercise</h2>
+              <button onClick={closeEdit} className="text-[#10251D]/50 hover:text-[#10251D]">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="px-5 pb-5 space-y-5 max-h-[70vh] overflow-y-auto">
+              {/* Target / reps */}
+              <div>
+                <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-[#10251D]/50">
+                  Reps / Time
+                </label>
+                <input
+                  type="text"
+                  value={draftTarget}
+                  onChange={(e) => setDraftTarget(e.target.value)}
+                  onBlur={applyTargetChange}
+                  className="w-full rounded-lg border border-[#10251D]/15 bg-[#F7F3EA] px-3 py-2.5 text-base font-semibold text-[#10251D] focus:border-[#1B3D2F] focus:outline-none"
+                  placeholder={defaultTarget}
+                />
+              </div>
+
+              {/* Swap exercise */}
+              <div>
+                <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-[#10251D]/50">
+                  Swap exercise
+                </p>
+
+                {loadingSubs && (
+                  <p className="py-3 text-center text-sm text-[#10251D]/40">Loading options…</p>
+                )}
+
+                {!loadingSubs && editSubs !== null && editSubs.length === 0 && (
+                  <p className="py-3 text-center text-sm text-[#10251D]/40">No substitutes available</p>
+                )}
+
+                {!loadingSubs && editSubs !== null && editSubs.length > 0 && (
+                  <ul className="grid gap-2">
+                    {/* Current / original exercise at top */}
+                    <li>
+                      <button
+                        onClick={handleRevert}
+                        className={`w-full rounded-lg px-3 py-2.5 text-left transition ${
+                          !wasSubstituted
+                            ? "border-2 border-[#1B3D2F] bg-[#1B3D2F]/8"
+                            : "border border-[#10251D]/12 bg-[#F7F3EA] hover:bg-[#EEE9DC]"
+                        }`}
+                      >
+                        <span className="block text-sm font-semibold text-[#10251D]">{originalBaseName}</span>
+                        <span className="block text-xs text-[#10251D]/50">Original</span>
+                      </button>
+                    </li>
+
+                    {editSubs.map((sub) => {
+                      const isSelected = subsEntry?.substitutedExerciseName === sub.substitute.name;
+                      return (
+                        <li key={sub.substitute.id}>
+                          <button
+                            onClick={() => handleSwap(sub)}
+                            className={`w-full rounded-lg px-3 py-2.5 text-left transition ${
+                              isSelected
+                                ? "border-2 border-[#1B3D2F] bg-[#1B3D2F]/8"
+                                : "border border-[#10251D]/12 bg-[#F7F3EA] hover:bg-[#EEE9DC]"
+                            }`}
+                          >
+                            <span className="block text-sm font-semibold text-[#10251D]">
+                              {sub.substitute.name}
+                            </span>
+                            <span className="block text-xs text-[#10251D]/50">
+                              {sub.substitute.difficulty} · {(sub.substitute.equipment as string[]).join(", ")}
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+
+                {!loadingSubs && editSubs === null && getCanonicalName(originalBaseName) === null && (
+                  <p className="py-3 text-center text-sm text-[#10251D]/40">No substitutes available for this exercise</p>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       )}

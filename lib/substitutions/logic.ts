@@ -10,7 +10,6 @@ export const WORKOUT_TO_CANONICAL_NAME: Record<string, string> = {
   Squat: "Dumbbell squat",
   "Overhead press": "Dumbbell overhead press",
   "Push-up renegade row": "Push-up renegade row",
-  "Dumbbell swing": "Dumbbell swing",
   "Hammer curl": "Dumbbell hammer curl",
   "Triceps extension": "Dumbbell triceps extension",
   Lunge: "Dumbbell lunge",
